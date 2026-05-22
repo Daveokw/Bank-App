@@ -2,7 +2,7 @@
 
 A full-featured banking web application prototype built with **Python**, **Streamlit**, and **SQLite**. This project demonstrates advanced core banking operations including a double-entry ledger system, automated NUBAN account generation, strict Nigerian banking standards, and a comprehensive administrative dashboard.
 
-## 🚀 Features
+## Features
 
 ### Core Banking & Nigerian Standards
 - **NUBAN Account Generation:** Automatically assigns a valid 10-digit NUBAN account number upon user registration.
@@ -20,7 +20,7 @@ An exclusive admin panel (accessible by logging in as `admin@gmail.com`) providi
 - **Global Trial Balance:** Ensures debits and credits across the entire bank are perfectly balanced.
 - **Subledgers View:** View balances for all bank internal accounts (Cash, Equity, Revenue, Interbank Payables, etc.).
 
-## 🛠 Tech Stack
+## Tech Stack
 
 | Component | Technology |
 |-----------|------------|
@@ -29,7 +29,7 @@ An exclusive admin panel (accessible by logging in as `admin@gmail.com`) providi
 | Database  | SQLite (built-in) |
 | Data manipulation | Pandas |
 
-## 🏁 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -56,13 +56,13 @@ An exclusive admin panel (accessible by logging in as `admin@gmail.com`) providi
 
    That's it! The SQLite database (`bank_app.db`) will be created automatically on the first run.
 
-## ⚙️ Automated Keep-Alive
+## Automated Keep-Alive
 This repository includes a built-in GitHub Actions workflow (`.github/workflows/keep_alive.yml`) powered by Playwright to automatically prevent the application from sleeping when deployed on Streamlit Community Cloud.
 
-## 📝 Notes
+## Notes
 - This is an **advanced portfolio project** designed to showcase backend logic, double-entry accounting principles, and responsive Python web development.
 - **Auto-Reset:** Because this is a demonstration prototype designed to be kept alive indefinitely in the cloud, the database is programmed to **automatically reset every 24 hours** in the background. The automated GitHub Actions keep-alive script seamlessly triggers this cycle behind the scenes, ensuring a completely fresh testing environment each day. As a safety fallback, if a user happens to be actively exploring the app at the exact moment the 24-hour timer expires, they are safely redirected to the login screen to prevent data conflicts.
 - The `bank_app.db` file is generated locally and ignored by Git. If deployed, the database is recreated fresh in the cloud environment.
 
-## 📄 License
+## License
 This project is open source and available for educational and portfolio purposes.
