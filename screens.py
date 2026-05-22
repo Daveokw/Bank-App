@@ -47,9 +47,9 @@ def show_signup():
         if submit:
             if not validate_email(email):
                 st.error("Invalid email format.")
-            elif not phone.isdigit() or len(phone) != 11:
+            elif username != 'admin' and (not phone.isdigit() or len(phone) != 11):
                 st.error("Phone number must be exactly 11 digits.")
-            elif phone[:3] not in ["080", "081", "090", "091", "070"]:
+            elif username != 'admin' and phone[:3] not in ["080", "081", "090", "091", "070"]:
                 st.error("Invalid phone number.")
             elif len(username) < 3:
                 st.error("Username too short.")
@@ -70,7 +70,8 @@ def show_signup():
                                 hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
                                 cur.execute("INSERT INTO customer (email, username, password) VALUES (?,?,?)", (email, username, hashed))
                                 cust_id = cur.lastrowid
-                                cur.execute("INSERT INTO phone (customer_id, phone_number) VALUES (?,?)", (cust_id, phone))
+                                if phone:
+                                    cur.execute("INSERT INTO phone (customer_id, phone_number) VALUES (?,?)", (cust_id, phone))
                                 acct_no = gen_account_no(cust_id)
                                 cur.execute("INSERT INTO account (customer_id, account_no) VALUES (?,?)", (cust_id, acct_no))
                                 account_id = cur.lastrowid
