@@ -91,7 +91,7 @@ def show_signup():
 def show_signin():
     st.title("Sign In")
     with st.form("signin_form"):
-        key = st.text_input("Email, Phone or Username")
+        key = st.text_input("Email or Phone")
         password = st.text_input("Password", type="password")
         submit = st.form_submit_button("Login", type="primary")
         
@@ -103,7 +103,7 @@ def show_signin():
                                    FROM customer c
                                    LEFT JOIN phone p ON c.id=p.customer_id
                                    JOIN account a ON c.id=a.customer_id
-                                   WHERE c.email=? OR c.username=? OR p.phone_number=? LIMIT 1''', (key, key, key))
+                                   WHERE c.email=? OR p.phone_number=? LIMIT 1''', (key, key))
                     row = cur.fetchone()
 
                     if not row:
