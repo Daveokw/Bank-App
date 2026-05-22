@@ -50,7 +50,7 @@ def show_signup():
             elif not phone.isdigit() or len(phone) != 11:
                 st.error("Phone number must be exactly 11 digits.")
             elif phone[:3] not in ["080", "081", "090", "091", "070"]:
-                st.error("Invalid Nigerian network prefix. Must start with 080, 081, 090, 091, or 070.")
+                st.error("Invalid phone number.")
             elif len(username) < 3:
                 st.error("Username too short.")
             elif len(password) < 4:
@@ -292,7 +292,7 @@ def show_dashboard():
                 if not phone.isdigit() or len(phone) != 11:
                     st.error("Invalid phone number! Must be exactly 11 digits.")
                 elif phone[:3] not in ["080", "081", "090", "091", "070"]:
-                    st.error("Invalid Nigerian network prefix. Must start with 080, 081, 090, 091, or 070.")
+                    st.error("Invalid phone number.")
                 elif Decimal(str(amount)) <= 0:
                     st.error("Airtime amount must be greater than zero.")
                 elif Decimal(str(amount)) > st.session_state.balance:
