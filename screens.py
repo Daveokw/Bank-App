@@ -13,7 +13,6 @@ from engine import (
 
 def navigate_to(page):
     st.session_state.page = page
-    st.rerun()
 
 def refresh_balance():
     if st.session_state.account_id:
