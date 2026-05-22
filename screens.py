@@ -137,8 +137,9 @@ def show_dashboard():
     is_admin = (st.session_state.username == 'admin' and st.session_state.email.lower() == 'admin@gmail.com')
 
     st.sidebar.title(f"Welcome, {st.session_state.username}")
-    st.sidebar.markdown(f"**Account No:** `{st.session_state.account_no}`")
-    st.sidebar.markdown(f"**Balance:** `₦{st.session_state.balance:,.2f}`")
+    if not is_admin:
+        st.sidebar.markdown(f"**Account No:** `{st.session_state.account_no}`")
+        st.sidebar.markdown(f"**Balance:** `₦{st.session_state.balance:,.2f}`")
     st.sidebar.divider()
     
     if "dash_view" not in st.session_state:
