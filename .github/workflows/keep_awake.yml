@@ -10,6 +10,19 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Streamlit App
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          
+      - name: Install Puppeteer
+        run: npm install puppeteer
+        
+      - name: Run keep_alive.js to Wake App
         # IMPORTANT: Replace the URL below with your actual Streamlit Cloud URL once you deploy it
-        run: curl -s https://your-streamlit-app-url.streamlit.app > /dev/null
+        env:
+          APP_URL: 'https://your-streamlit-app-url.streamlit.app'
+        run: node .github/workflows/keep_alive.js
