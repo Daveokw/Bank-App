@@ -51,7 +51,7 @@ An exclusive admin panel (accessible by logging in as `admin@gmail.com`) providi
 
 3. **Run the application**
    ```bash
-   streamlit run "bank app.py"
+   streamlit run app.py
    ```
 
    That's it! The SQLite database (`bank_app.db`) will be created automatically on the first run.
