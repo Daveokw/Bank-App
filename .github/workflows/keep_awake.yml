@@ -10,9 +10,6 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-        
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
@@ -21,8 +18,32 @@ jobs:
       - name: Install Puppeteer
         run: npm install puppeteer
         
-      - name: Run keep_alive.js to Wake App
+      - name: Wake up Streamlit App
         # IMPORTANT: Replace the URL below with your actual Streamlit Cloud URL once you deploy it
         env:
           APP_URL: 'https://your-streamlit-app-url.streamlit.app'
-        run: node .github/workflows/keep_alive.js
+        run: |
+          cat << 'EOF' > keep_alive.js
+          const puppeteer = require('puppeteer');
+
+          (async () => {
+            const url = process.env.APP_URL;
+            console.log(`Visiting ${url} to keep it awake...`);
+            
+            const browser = await puppeteer.launch({ 
+              headless: "new",
+              args: ['--no-sandbox', '--disable-setuid-sandbox'] 
+            });
+            const page = await browser.newPage();
+            
+            try {
+              await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+              console.log('Successfully loaded the page and fully woke up the Streamlit backend.');
+            } catch (error) {
+              console.error(`Failed to load page: ${error}`);
+            } finally {
+              await browser.close();
+            }
+          })();
+          EOF
+          node keep_alive.js
