@@ -1,91 +1,67 @@
-# DAVE Bank - Command-Line Banking Application
+# DAVE Bank - Advanced Banking Web Application
 
-A prototype command-line banking application built with **Python** and **SQLite**. This project demonstrates core banking operations including account management, fund transfers, and transaction history — all within an interactive terminal interface.
+A full-featured banking web application prototype built with **Python**, **Streamlit**, and **SQLite**. This project demonstrates advanced core banking operations including a double-entry ledger system, automated NUBAN account generation, strict Nigerian banking standards, and a comprehensive administrative dashboard.
 
-## Features
+## 🚀 Features
 
-- **Account Management** — Sign up with email validation and secure password input
-- **Deposits & Withdrawals** — Add or remove funds with real-time balance updates
-- **Fund Transfers** — Transfer money to external bank accounts
-- **Airtime Purchase** — Buy airtime for any mobile network
-- **Bill Payments** — Pay bills (electricity, internet, water, etc.)
-- **Transaction History** — View a formatted log of all past transactions
+### Core Banking & Nigerian Standards
+- **NUBAN Account Generation:** Automatically assigns a valid 10-digit NUBAN account number upon user registration.
+- **Strict Validations:** Enforces 11-digit Nigerian phone numbers with standard network prefixes (MTN, Airtel, Glo, 9mobile) and 10-digit transfer accounts.
+- **Naira Currency:** Fully localized with the Nigerian Naira (₦) symbol.
+- **Secure Authentication:** User accounts are protected using SHA-256 password hashing.
 
-## Tech Stack
+### Transactions & Accounting
+- **Double-Entry Ledger:** Every transaction (Deposit, Withdrawal, Transfer, Airtime, Bills) automatically creates balanced debit and credit entries across underlying subledger accounts (e.g., Cash, Customer Deposits, Airtime Payable).
+- **Fund Transfers:** Supports both internal transfers to other users and external transfers.
+- **Transaction History & Ledger:** Users can view a simplified transaction history as well as a detailed, professional customer ledger showing every accounting entry.
+
+### Administrative Dashboard
+An exclusive admin panel (accessible by logging in as `admin@gmail.com`) providing oversight:
+- **Global Trial Balance:** Ensures debits and credits across the entire bank are perfectly balanced.
+- **Subledgers View:** View balances for all bank internal accounts (Cash, Equity, Revenue, Interbank Payables, etc.).
+
+## 🛠 Tech Stack
 
 | Component | Technology |
 |-----------|------------|
-| Language  | Python 3   |
+| Language  | Python 3 |
+| Frontend  | Streamlit |
 | Database  | SQLite (built-in) |
-| Auth      | CLI-based password input via `getpass` |
+| Data manipulation | Pandas |
 
-## Getting Started
+## 🏁 Getting Started
 
 ### Prerequisites
 
-- **Python 3.7+** installed on your machine
+- **Python 3.8+** installed on your machine
+- Required Python libraries: `streamlit`, `pandas`
 
 ### Installation
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/YOUR_USERNAME/bank-app.git
-   cd bank-app
+   git clone https://github.com/Daveokw/Bank-App.git
+   cd Bank-App
    ```
 
-2. **Run the application**
+2. **Install dependencies**
    ```bash
-   python "bank app.py"
+   pip install -r requirements.txt
    ```
 
-   That's it! No additional dependencies or database setup required. SQLite creates the database file automatically on first run.
+3. **Run the application**
+   ```bash
+   streamlit run "bank app.py"
+   ```
 
-## Usage
+   That's it! The SQLite database (`bank_app.db`) will be created automatically on the first run.
 
-```
----------------------------------------------
-        Welcome to DAVE Bank
----------------------------------------------
-  1. Sign Up
-  2. Sign In
-  #. Exit
----------------------------------------------
-  Option: 1
-```
+## ⚙️ Automated Keep-Alive
+This repository includes a built-in GitHub Actions workflow (`.github/workflows/keep_alive.yml`) powered by Playwright to automatically prevent the application from sleeping when deployed on Streamlit Community Cloud.
 
-After signing up, you can sign in to access the full menu:
+## 📝 Notes
+- This is an **advanced portfolio project** designed to showcase backend logic, double-entry accounting principles, and responsive Python web development.
+- The `bank_app.db` file is generated locally and ignored by Git. If deployed, the database is recreated fresh in the cloud environment.
 
-```
----------------------------------------------
-  Logged in as: user@example.com
----------------------------------------------
-  1. Check Balance
-  2. Deposit
-  3. Withdraw
-  4. Transfer
-  5. Buy Airtime
-  6. Pay Bills
-  7. Transaction History
-  8. Sign Out
----------------------------------------------
-```
-
-## Project Structure
-
-```
-bank-app/
-├── bank app.py      # Main application logic
-├── README.md        # Project documentation
-├── .gitignore       # Git ignore rules
-└── requirements.txt # Python dependencies (none required)
-```
-
-## Notes
-
-- This is a **prototype / portfolio project** — it is not intended for production use.
-- Passwords are stored in plain text for simplicity. A production version would use hashing (e.g., `bcrypt`).
-- The SQLite database (`bank_app.db`) is created locally and excluded from version control.
-
-## License
-
-This project is open source and available for educational purposes.
+## 📄 License
+This project is open source and available for educational and portfolio purposes.

@@ -1,10 +1,3 @@
-"""
-DAVE Bank - Streamlit Banking Application (Advanced Edition)
-
-A full-featured banking application built with Python, SQLite, and Streamlit.
-Features double-entry bookkeeping, admin dashboards, NUBAN generation,
-and strict Nigerian banking standards.
-"""
 
 import sqlite3 as sql
 from datetime import datetime
