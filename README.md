@@ -1,14 +1,12 @@
 # DAVE Bank - Advanced Banking Web Application
 
-A full-featured banking web application prototype built with **Python**, **Streamlit**, and **SQLite**. This project demonstrates advanced core banking operations including a double-entry ledger system, automated NUBAN account generation, strict Nigerian banking standards, and a comprehensive administrative dashboard.
+A full-featured banking web application prototype built with **Python**, **Streamlit**, and **SQLite**. This project demonstrates advanced core banking operations including a double-entry ledger system, automated NUBAN account generation, Nigerian banking standards, and a comprehensive administrative dashboard.
 
 ## Features
 
 ### Core Banking & Nigerian Standards
 - **NUBAN Account Generation:** Automatically assigns a valid 10-digit NUBAN account number upon user registration.
-- **Strict Validations:** Enforces 11-digit Nigerian phone numbers with standard network prefixes (MTN, Airtel, Glo, 9mobile) and 10-digit transfer accounts.
-- **Naira Currency:** Fully localised with the Nigerian Naira (₦) symbol.
-- **Secure Authentication:** User accounts are protected using SHA-256 password hashing.
+- **Secure Authentication:** User accounts are protected using industry-standard `bcrypt` password hashing with automatically generated salts.
 
 ### Transactions & Accounting
 - **Double-Entry Ledger:** Every transaction (Deposit, Withdrawal, Transfer, Airtime, Bills) automatically creates balanced debit and credit entries across underlying subledger accounts (e.g., Cash, Customer Deposits, Airtime Payable).

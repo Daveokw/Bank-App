@@ -1,7 +1,7 @@
 import streamlit as st
 import sqlite3 as sql
 import pandas as pd
-import hashlib
+import bcrypt
 import uuid
 import time
 from decimal import Decimal
@@ -68,7 +68,7 @@ def show_signup():
                             if cur.fetchone():
                                 st.error("This phone number is already registered.")
                             else:
-                                hashed = hashlib.sha256(password.encode()).hexdigest()
+                                hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
                                 cur.execute("INSERT INTO customer (email, username, password) VALUES (?,?,?)", (email, username, hashed))
                                 cust_id = cur.lastrowid
                                 cur.execute("INSERT INTO phone (customer_id, phone_number) VALUES (?,?)", (cust_id, phone))
@@ -115,7 +115,7 @@ def show_signin():
                             else:
                                 st.error("Account has no password. Contact admin.")
                         else:
-                            if hashlib.sha256(password.encode()).hexdigest() == stored:
+                            if bcrypt.checkpw(password.encode('utf-8'), stored.encode('utf-8')):
                                 st.session_state.customer_id = cid
                                 st.session_state.email = email
                                 st.session_state.username = username
