@@ -46,14 +46,14 @@ erDiagram
     transaction_header {
         int id PK
         string ref_no UK
-        string status "PENDING, COMMITTED, REVERSED"
+        string status
         string idempotency_key UK
     }
     
     bank_ledger {
         int id PK
         string ref_no FK
-        string account_name "e.g., Cash, Customer_Deposits"
+        string account_name
         float debit
         float credit
     }
