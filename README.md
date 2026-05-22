@@ -1,4 +1,4 @@
-# DAVE Bank - Advanced Banking Web Application
+# Banking Web Application
 
 A full-featured banking web application prototype built with **Python**, **Streamlit**, and **SQLite**. This project demonstrates advanced core banking operations including a double-entry ledger system, automated NUBAN account generation, Nigerian banking standards, and a comprehensive administrative dashboard.
 
