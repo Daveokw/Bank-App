@@ -8,6 +8,12 @@ A full-featured banking web application prototype built with **Python**, **Strea
 - **NUBAN Account Generation:** Automatically assigns a valid 10-digit NUBAN account number upon user registration.
 - **Secure Authentication:** User accounts are protected using industry-standard `bcrypt` password hashing with automatically generated salts.
 
+### Financial Engineering & Backend Architecture
+- **Transaction State Machine:** Transactions are processed through strict states (`PENDING` -> `COMMITTED` -> `REVERSED`).
+- **Database-Level Validations:** The SQLite database utilizes rigorous `TRIGGER` constraints. At the exact moment a transaction attempts to commit, the database calculates `SUM(debit) - SUM(credit)`. If the ledger is not perfectly balanced (zero), the database forcefully issues an `ABORT` and rolls back the transaction. This guarantees it is mathematically impossible to record an unbalanced entry regardless of application-level bugs.
+- **Idempotency Keys (Double-Charge Protection):** Implements unique UUID idempotency keys passed from the frontend session state. This ensures that network latency or double-clicks do not result in duplicate ledger entries or double charges.
+- **Structured Audit Logging:** Utilizes Python's native `logging` library to maintain a precise, structured audit trail (`bank_app.log`) of every transaction attempt, success, and failure for observability.
+
 ### Transactions & Accounting
 - **Double-Entry Ledger:** Every transaction (Deposit, Withdrawal, Transfer, Airtime, Bills) automatically creates balanced debit and credit entries across underlying subledger accounts (e.g., Cash, Customer Deposits, Airtime Payable).
 - **Fund Transfers:** Supports both internal transfers to other users and external transfers.
@@ -18,7 +24,7 @@ An exclusive admin panel (accessible by logging in as `admin@gmail.com`) providi
 - **Global Trial Balance:** Ensures debits and credits across the entire bank are perfectly balanced.
 - **Subledgers View:** View balances for all bank internal accounts (Cash, Equity, Revenue, Interbank Payables, etc.).
 
-## Tech Stack
+## Tech Stack & Architecture Decisions
 
 | Component | Technology |
 |-----------|------------|
@@ -26,6 +32,9 @@ An exclusive admin panel (accessible by logging in as `admin@gmail.com`) providi
 | Frontend  | Streamlit |
 | Database  | SQLite (built-in) |
 | Data manipulation | Pandas |
+
+**Why SQLite?**
+While enterprise financial systems typically rely on robust RDBMS engines like PostgreSQL or Oracle, **SQLite** was intentionally chosen for this specific prototype. It demonstrates the ability to implement rigorous financial constraints (like `BEFORE UPDATE` triggers, transaction state machines, and relational integrity) entirely within a lightweight, zero-configuration environment. This makes the prototype instantly deployable on ephemeral cloud environments (like Streamlit Community Cloud) without requiring readers or recruiters to provision external database servers just to test the application's underlying logic.
 
 ## Getting Started
 
