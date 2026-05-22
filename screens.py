@@ -83,6 +83,7 @@ def show_signup():
                                 st.success(f"Account created successfully! Your NUBAN Account #: {acct_no}")
                                 time.sleep(3)
                                 navigate_to("home")
+                                st.rerun()
                 except sql.Error as err: 
                     st.error(f"Database Error: {err}")
     st.button("Back to Home", on_click=navigate_to, args=("home",))
@@ -124,6 +125,7 @@ def show_signin():
                                 st.session_state.balance = Decimal(str(bal))
                                 st.session_state.phone = phone or ""
                                 navigate_to("dashboard")
+                                st.rerun()
                             else:
                                 st.error("Incorrect password!")
             except sql.Error as err:
