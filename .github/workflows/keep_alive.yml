@@ -1,0 +1,38 @@
+name: Keep Streamlit App Awake
+
+on:
+  schedule:
+    # This schedule runs the keep-alive every 6 hours
+    - cron: "0 */6 * * *"
+  
+  # Allows you to trigger the action manually from GitHub's Actions tab
+  workflow_dispatch:
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Playwright
+        run: npm install playwright
+
+      - name: Install Chromium browser
+        run: npx playwright install chromium
+
+      - name: Run Playwright Keep-Alive Script
+        # NOTE: Once deployed, make sure this URL matches your actual Streamlit App URL!
+        run: node keep_alive.js "https://bank-app-daveokw.streamlit.app/"
+
+      - name: Upload Screenshot Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: keep-alive-screenshot
+          path: keep_alive_screenshot.png
+          retention-days: 3
