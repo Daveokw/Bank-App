@@ -4,7 +4,15 @@ import uuid
 from decimal import Decimal
 import streamlit as st
 import re
+import logging
 from db import DB_PATH
+
+logging.basicConfig(
+    filename='bank_app.log',
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 def validate_email(email):
     return re.match(r"[^@]+@[^@]+\.[^@]+", email.strip())
@@ -39,12 +47,17 @@ def validate_nuban(account_no: str, bank_code="011", branch_code="000") -> bool:
 def _new_ref():
     return 'JNL-' + uuid.uuid4().hex[:12]
 
-def record_double_entry(entries, description='', tx_type=''):
+def record_double_entry(entries, description='', tx_type='', idempotency_key=None):
     if not isinstance(entries, list) or len(entries) < 2: return
     ref = _new_ref()
+    logger.info(f"Starting transaction {ref} (Type: {tx_type})")
     try:
         with sql.connect(DB_PATH) as conn:
             cur = conn.cursor()
+            
+            # 1. State Machine: PENDING
+            cur.execute("INSERT INTO transaction_header (ref_no, status, idempotency_key) VALUES (?, ?, ?)",
+                        (ref, 'PENDING', idempotency_key))
             for line in entries:
                 acct = line.get('account_name')
                 debit = float(line.get('debit') or 0.00)
@@ -77,11 +90,25 @@ def record_double_entry(entries, description='', tx_type=''):
                         cur.execute('''INSERT INTO customer_subledger (ref_no, account_id, subledger_account_id, debit, credit, balance_after, description, tx_type, created_at)
                                        VALUES (?,?,?,?,?,?,?,?,?)''',
                                     (ref, acct_id, sub_id, debit, credit, float(customer_new_bal), description, tx_type, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+            # 2. State Machine: COMMITTED (Fires SQLite Validation Trigger)
+            cur.execute("UPDATE transaction_header SET status = 'COMMITTED' WHERE ref_no = ?", (ref,))
             conn.commit()
+            logger.info(f"Transaction {ref} COMMITTED successfully.")
+    except sql.IntegrityError as e:
+        logger.error(f"Idempotency or Integrity Error on {ref}: {e}")
+        raise e
     except sql.Error as e:
-        print("Ledger write error:", e)
+        logger.critical(f"Transaction {ref} FAILED. Error: {e}. State rolling back.")
+        try:
+            with sql.connect(DB_PATH) as conn2:
+                cur2 = conn2.cursor()
+                cur2.execute("UPDATE transaction_header SET status = 'REVERSED' WHERE ref_no = ?", (ref,))
+                conn2.commit()
+        except Exception:
+            pass
+        raise e
 
-def exec_transaction(t_type, amount, extra=None):
+def exec_transaction(t_type, amount, extra=None, idempotency_key=None):
     amount_dec = Decimal(str(amount))
     if amount_dec <= 0:
         st.error("Amount must be greater than zero.")
@@ -90,10 +117,18 @@ def exec_transaction(t_type, amount, extra=None):
     try:
         with sql.connect(DB_PATH) as conn:
             cur = conn.cursor()
+            
+            # Idempotency check
+            if idempotency_key:
+                cur.execute("SELECT id FROM transaction_record WHERE idempotency_key=?", (idempotency_key,))
+                if cur.fetchone():
+                    logger.warning(f"Idempotency key {idempotency_key} already processed. Ignoring duplicate.")
+                    return True
+            
             new_bal = st.session_state.balance
             cur.execute("UPDATE account SET balance=? WHERE id=?", (float(new_bal), st.session_state.account_id))
-            cur.execute("INSERT INTO transaction_record (account_id,transaction_type,amount,date) VALUES (?,?,?,?)", 
-                        (st.session_state.account_id, t_type, float(amount_dec), datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+            cur.execute("INSERT INTO transaction_record (account_id,transaction_type,amount,idempotency_key,date) VALUES (?,?,?,?,?)", 
+                        (st.session_state.account_id, t_type, float(amount_dec), idempotency_key, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
             
             debit = amount_dec if t_type in ("Withdrawal", "Transfer", "Pay Bills", "Buy Airtime") else Decimal('0.00')
             credit = amount_dec if t_type == "Deposit" else Decimal('0.00')
@@ -150,7 +185,7 @@ def exec_transaction(t_type, amount, extra=None):
                 {'account_name': 'Suspense', 'debit': Decimal('0.00'), 'credit': Decimal('0.00'), 'related': f'Generic {acct_no}', 'account_id': acct_id}
             ]
 
-        record_double_entry(entries, description=description, tx_type=tx_type)
+        record_double_entry(entries, description=description, tx_type=tx_type, idempotency_key=idempotency_key)
         return True
     except sql.Error as e:
         st.error(f"DB Error: {e}")

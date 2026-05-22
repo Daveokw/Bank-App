@@ -78,8 +78,19 @@ def init_db(st):
                     account_id INTEGER NOT NULL,
                     transaction_type TEXT NOT NULL,
                     amount REAL NOT NULL,
+                    idempotency_key TEXT UNIQUE,
                     date DATETIME DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE CASCADE
+                )
+            ''')
+            
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS transaction_header (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ref_no TEXT UNIQUE NOT NULL,
+                    status TEXT NOT NULL, 
+                    idempotency_key TEXT UNIQUE,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
             
@@ -151,6 +162,18 @@ def init_db(st):
                     FOREIGN KEY (account_id) REFERENCES account(id) ON DELETE CASCADE,
                     FOREIGN KEY (subledger_account_id) REFERENCES subledger_account(id) ON DELETE CASCADE
                 )
+            ''')
+
+            cursor.execute('''
+                CREATE TRIGGER IF NOT EXISTS validate_double_entry
+                BEFORE UPDATE OF status ON transaction_header
+                WHEN NEW.status = 'COMMITTED'
+                BEGIN
+                    SELECT CASE 
+                        WHEN (SELECT ROUND(SUM(debit) - SUM(credit), 2) FROM bank_ledger WHERE ref_no = NEW.ref_no) != 0.00
+                        THEN RAISE(ABORT, 'Ledger unbalanced: Debits do not equal Credits')
+                    END;
+                END;
             ''')
 
             conn.commit()

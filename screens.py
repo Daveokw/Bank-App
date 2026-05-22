@@ -144,9 +144,12 @@ def show_dashboard():
     
     if "dash_view" not in st.session_state:
         st.session_state.dash_view = "Check Balance" if not is_admin else "Trial Balance"
+    if "idempotency_key" not in st.session_state:
+        st.session_state.idempotency_key = str(uuid.uuid4())
         
     def set_dash_view(view):
         st.session_state.dash_view = view
+        st.session_state.idempotency_key = str(uuid.uuid4())
 
     if is_admin:
         st.sidebar.button("📊 Trial Balance", on_click=set_dash_view, args=("Trial Balance",), use_container_width=True)
@@ -216,8 +219,9 @@ def show_dashboard():
             amount = st.number_input("Amount to Deposit (₦)", min_value=1.0, step=100.0)
             if st.form_submit_button("Deposit Funds"):
                 st.session_state.balance += Decimal(str(amount))
-                if exec_transaction("Deposit", amount):
+                if exec_transaction("Deposit", amount, idempotency_key=st.session_state.idempotency_key):
                     st.success(f"₦{amount:,.2f} deposited successfully!")
+                    st.session_state.idempotency_key = str(uuid.uuid4())
                     time.sleep(2)
                     st.rerun()
 
@@ -229,8 +233,9 @@ def show_dashboard():
                     st.error("Insufficient Balance!")
                 else:
                     st.session_state.balance -= Decimal(str(amount))
-                    if exec_transaction("Withdrawal", amount):
+                    if exec_transaction("Withdrawal", amount, idempotency_key=st.session_state.idempotency_key):
                         st.success(f"₦{amount:,.2f} withdrawn successfully!")
+                        st.session_state.idempotency_key = str(uuid.uuid4())
                         time.sleep(2)
                         st.rerun()
 
@@ -275,13 +280,14 @@ def show_dashboard():
                                 conn.commit()
                                 
                                 extra = {'receiver_account_id': receiver_id, 'receiver_acct_no': receiver_acct, 'receiver_bank': bank}
-                                exec_transaction("Transfer", amount, extra=extra)
+                                exec_transaction("Transfer", amount, extra=extra, idempotency_key=st.session_state.idempotency_key)
                             else:
                                 # External Transfer
                                 extra = {'receiver_bank': bank, 'receiver_acct_no': receiver_acct}
-                                exec_transaction("Transfer", amount, extra=extra)
+                                exec_transaction("Transfer", amount, extra=extra, idempotency_key=st.session_state.idempotency_key)
                                 
                         st.success(f"₦{amount:,.2f} transferred to {receiver_acct} ({bank}).")
+                        st.session_state.idempotency_key = str(uuid.uuid4())
                         time.sleep(2)
                         st.rerun()
                     except sql.Error as e:
@@ -304,8 +310,9 @@ def show_dashboard():
                 else:
                     st.session_state.balance -= Decimal(str(amount))
                     extra = {'phone': phone}
-                    if exec_transaction("Buy Airtime", amount, extra=extra):
+                    if exec_transaction("Buy Airtime", amount, extra=extra, idempotency_key=st.session_state.idempotency_key):
                         st.success(f"₦{amount:,.2f} airtime recharged on {network} ({phone}).")
+                        st.session_state.idempotency_key = str(uuid.uuid4())
                         time.sleep(2)
                         st.rerun()
 
@@ -321,8 +328,9 @@ def show_dashboard():
                 else:
                     st.session_state.balance -= Decimal(str(amount))
                     extra = {'bill': bill_type}
-                    if exec_transaction("Pay Bills", amount, extra=extra):
+                    if exec_transaction("Pay Bills", amount, extra=extra, idempotency_key=st.session_state.idempotency_key):
                         st.success(f"₦{amount:,.2f} paid for {bill_type}.")
+                        st.session_state.idempotency_key = str(uuid.uuid4())
                         time.sleep(2)
                         st.rerun()
 
