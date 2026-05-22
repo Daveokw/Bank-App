@@ -2,6 +2,7 @@ import sqlite3 as sql
 from datetime import datetime
 import os
 import uuid
+import bcrypt
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bank_app.db")
 
@@ -180,7 +181,8 @@ def init_db(st):
             # Seed Admin Account
             cursor.execute("SELECT id FROM customer WHERE username='admin' OR email='admin@gmail.com' LIMIT 1")
             if cursor.fetchone() is None:
-                cursor.execute("INSERT INTO customer (email, username, password) VALUES (?,?,?)", ("admin@gmail.com","admin", None))
+                hashed_admin = bcrypt.hashpw('admin'.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+                cursor.execute("INSERT INTO customer (email, username, password) VALUES (?,?,?)", ("admin@gmail.com","admin", hashed_admin))
                 admin_id = cursor.lastrowid
                 cursor.execute("INSERT INTO account (customer_id, account_no, balance) VALUES (?,?,?)", (admin_id, "ADMIN0000001", 0.00))
                 admin_account_id = cursor.lastrowid
