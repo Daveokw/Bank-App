@@ -325,7 +325,7 @@ def show_dashboard():
     elif st.session_state.dash_view == "Transaction History":
         try:
             with sql.connect(DB_PATH) as conn:
-                query = "SELECT transaction_type as Transaction, amount as Amount, date as Date FROM transaction_record WHERE account_id = ? ORDER BY date DESC"
+                query = "SELECT transaction_type AS 'Transaction', amount AS 'Amount', date AS 'Date' FROM transaction_record WHERE account_id = ? ORDER BY date DESC"
                 df = pd.read_sql_query(query, conn, params=(st.session_state.account_id,))
                 if df.empty:
                     st.info("No transactions found.")
@@ -338,7 +338,7 @@ def show_dashboard():
     elif st.session_state.dash_view == "View Customer Ledger":
         try:
             with sql.connect(DB_PATH) as conn:
-                query = "SELECT date as Date, description as Description, debit as Debit, credit as Credit, balance as Balance FROM ledger WHERE account_id = ? ORDER BY date DESC"
+                query = "SELECT date AS 'Date', description AS 'Description', debit AS 'Debit', credit AS 'Credit', balance AS 'Balance' FROM ledger WHERE account_id = ? ORDER BY date DESC"
                 df = pd.read_sql_query(query, conn, params=(st.session_state.account_id,))
                 if df.empty:
                     st.info("No ledger entries found.")

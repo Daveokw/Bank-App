@@ -182,7 +182,6 @@ def init_db(st):
             if cursor.fetchone() is None:
                 cursor.execute("INSERT INTO customer (email, username, password) VALUES (?,?,?)", ("admin@gmail.com","admin", None))
                 admin_id = cursor.lastrowid
-                cursor.execute("INSERT INTO phone (customer_id, phone_number) VALUES (?,?)", (admin_id, "100"))
                 cursor.execute("INSERT INTO account (customer_id, account_no, balance) VALUES (?,?,?)", (admin_id, "ADMIN0000001", 0.00))
                 admin_account_id = cursor.lastrowid
                 cursor.execute("INSERT INTO ledger (account_id, description, debit, credit, balance) VALUES (?,?,?,?,?)",
