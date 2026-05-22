@@ -6,7 +6,7 @@ from screens import show_home, show_signup, show_signin, show_dashboard
 # --- Application Configuration ---
 st.set_page_config(page_title="DAVE Bank", page_icon="🏦", layout="wide")
 
-# --- Session State Initialization ---
+# --- Session State Initialisation ---
 if "page" not in st.session_state: st.session_state.page = "home"
 if "customer_id" not in st.session_state: st.session_state.customer_id = None
 if "account_id" not in st.session_state: st.session_state.account_id = None
@@ -16,7 +16,7 @@ if "username" not in st.session_state: st.session_state.username = None
 if "phone" not in st.session_state: st.session_state.phone = None
 if "balance" not in st.session_state: st.session_state.balance = Decimal('0.00')
 
-# --- Database Initialization (and auto-reset check) ---
+# --- Database Initialisation (and auto-reset check) ---
 init_db(st)
 
 # --- Main Routing ---

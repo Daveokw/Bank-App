@@ -7,7 +7,7 @@ A full-featured banking web application prototype built with **Python**, **Strea
 ### Core Banking & Nigerian Standards
 - **NUBAN Account Generation:** Automatically assigns a valid 10-digit NUBAN account number upon user registration.
 - **Strict Validations:** Enforces 11-digit Nigerian phone numbers with standard network prefixes (MTN, Airtel, Glo, 9mobile) and 10-digit transfer accounts.
-- **Naira Currency:** Fully localized with the Nigerian Naira (₦) symbol.
+- **Naira Currency:** Fully localised with the Nigerian Naira (₦) symbol.
 - **Secure Authentication:** User accounts are protected using SHA-256 password hashing.
 
 ### Transactions & Accounting

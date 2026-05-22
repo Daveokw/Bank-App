@@ -24,7 +24,7 @@ def check_and_reset_db(st):
     return False
 
 def init_db(st):
-    """Initializes all tables and seeds the default subledgers and admin account."""
+    """Initialises all tables and seeds the default subledgers and admin account."""
     if check_and_reset_db(st):
         try:
             os.remove(DB_PATH)
