@@ -61,6 +61,7 @@ This repository includes a built-in GitHub Actions workflow (`.github/workflows/
 
 ## 📝 Notes
 - This is an **advanced portfolio project** designed to showcase backend logic, double-entry accounting principles, and responsive Python web development.
+- **Auto-Reset:** Because this is a demonstration prototype designed to be kept alive indefinitely in the cloud, the database is programmed to **automatically reset every 24 hours**. This ensures a fresh environment for testing.
 - The `bank_app.db` file is generated locally and ignored by Git. If deployed, the database is recreated fresh in the cloud environment.
 
 ## 📄 License

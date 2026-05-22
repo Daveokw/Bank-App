@@ -14,10 +14,41 @@ st.set_page_config(page_title="DAVE Bank", page_icon="🏦", layout="wide")
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bank_app.db")
 
+def check_and_reset_db():
+    if os.path.exists(DB_PATH):
+        try:
+            with sql.connect(DB_PATH) as conn:
+                cur = conn.cursor()
+                cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='system_config'")
+                if cur.fetchone():
+                    cur.execute("SELECT value FROM system_config WHERE key='created_at'")
+                    row = cur.fetchone()
+                    if row:
+                        created_at = datetime.fromisoformat(row[0])
+                        if (datetime.now() - created_at).total_seconds() > 24 * 3600:
+                            return True
+        except Exception:
+            pass
+    return False
+
 def init_db():
+    if check_and_reset_db():
+        try:
+            os.remove(DB_PATH)
+            st.session_state.clear()
+        except OSError:
+            pass
+
     try:
         with sql.connect(DB_PATH) as conn:
             cursor = conn.cursor()
+            
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS system_config (
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                )
+            ''')
             
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS customer (
@@ -129,6 +160,11 @@ def init_db():
             ''')
 
             conn.commit()
+
+            # Seed system config
+            cursor.execute("SELECT value FROM system_config WHERE key='created_at'")
+            if cursor.fetchone() is None:
+                cursor.execute("INSERT INTO system_config (key, value) VALUES (?, ?)", ("created_at", datetime.now().isoformat()))
 
             # Seed subledger accounts
             seed_accounts = [
