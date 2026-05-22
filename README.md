@@ -76,7 +76,8 @@ erDiagram
 | Data manipulation | Pandas |
 
 **Why SQLite?**
-While enterprise financial systems typically rely on robust RDBMS engines like PostgreSQL or Oracle, **SQLite** was intentionally chosen for this specific prototype. It demonstrates the ability to implement rigorous financial constraints (like `BEFORE UPDATE` triggers, transaction state machines, and relational integrity) entirely within a lightweight, zero-configuration environment. This makes the prototype instantly deployable on ephemeral cloud environments (like Streamlit Community Cloud) without requiring readers or recruiters to provision external database servers just to test the application's underlying logic.
+While enterprise financial systems typically rely on robust RDBMS engines like PostgreSQL or Oracle (which can easily be deployed in modern cloud environments), **SQLite** was intentionally chosen for this specific prototype. By using a lightweight, built-in database, I was able to demonstrate rigorous financial constraints (like `BEFORE UPDATE` triggers, transaction state machines, and relational integrity) in a zero-configuration environment. This ensures the prototype is instantly deployable—anyone can clone the repository or test the live Streamlit app without needing to provision external database servers or configure connection strings just to verify the underlying logic.
+
 
 ## Getting Started
 
