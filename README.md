@@ -28,43 +28,7 @@ An exclusive admin panel (accessible by logging in as `admin@gmail.com`) providi
 
 The core architecture revolves around separating customer accounts from the double-entry accounting ledgers.
 
-```mermaid
-erDiagram
-    customer ||--o{ account : "owns"
-    customer ||--o{ phone : "has"
-    account ||--o{ transaction_record : "initiates"
-    account ||--o{ ledger : "has simple history"
-    
-    transaction_header ||--|{ bank_ledger : "groups"
-    transaction_header ||--|{ customer_ledger : "groups"
-    transaction_header ||--|{ customer_subledger : "groups"
-    
-    account ||--o{ customer_ledger : "tracks balance"
-    subledger_account ||--o{ customer_subledger : "groups by"
-    account ||--o{ customer_subledger : "tracks"
-    
-    transaction_header {
-        int id PK
-        string ref_no UK
-        string status
-        string idempotency_key UK
-    }
-    
-    bank_ledger {
-        int id PK
-        string ref_no FK
-        string account_name
-        float debit
-        float credit
-    }
-    
-    account {
-        int id PK
-        int customer_id FK
-        string account_no UK
-        float balance
-    }
-```
+![Database Schema ERD](erd.png)
 
 ## Tech Stack & Architecture Decisions
 
