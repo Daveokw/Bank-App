@@ -28,7 +28,7 @@ jobs:
 
       - name: Run Playwright Keep-Alive Script
         # NOTE: Once deployed, make sure this URL matches your actual Streamlit App URL!
-        run: node keep_alive.js "https://bank-app-daveokw.streamlit.app/"
+        run: node keep_alive.js "https://dbank-app.streamlit.app/"
 
       - name: Upload Screenshot Artifact
         uses: actions/upload-artifact@v4
