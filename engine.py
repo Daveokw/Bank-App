@@ -92,7 +92,7 @@ def record_double_entry_inline(cur, entries, description='', tx_type='', idempot
 def exec_transaction(t_type, amount, extra=None, idempotency_key=None):
     amount_dec = Decimal(str(amount))
     if amount_dec <= 0:
-        st.error("Amount must be greater than zero.")
+        st.error("Invalid amount.")
         return False
         
     try:
@@ -117,7 +117,7 @@ def exec_transaction(t_type, amount, extra=None, idempotency_key=None):
             else:
                 new_bal = current_bal - amount_dec
                 if new_bal < 0:
-                    st.error("Insufficient Balance!")
+                    st.error("Insufficient balance.")
                     return False
             
             receiver_id = None
@@ -140,7 +140,7 @@ def exec_transaction(t_type, amount, extra=None, idempotency_key=None):
                         if extra is None: extra = {}
                         extra['receiver_account_id'] = receiver_id
                     else:
-                        st.error("Invalid account number. Account not found.")
+                        st.error("Account not found.")
                         return False
             
             cur.execute("UPDATE account SET balance=? WHERE id=?", (float(new_bal), st.session_state.account_id))
@@ -206,5 +206,5 @@ def exec_transaction(t_type, amount, extra=None, idempotency_key=None):
             
     except sql.Error as e:
         logger.error(f"Transaction failed: {e}")
-        st.error(f"DB Error: {e}")
+        st.error("Database error.")
         return False

@@ -50,28 +50,28 @@ def show_signup():
             username = username.strip()
             password = password.strip()
             if not email or not phone or not username or not password:
-                st.error("All fields are required.")
+                st.error("Missing fields.")
             elif not validate_email(email):
-                st.error("Invalid email format.")
+                st.error("Invalid email.")
             elif username != 'admin' and (not phone.isdigit() or len(phone) != 11):
-                st.error("Phone number must be exactly 11 digits.")
+                st.error("Invalid phone number.")
             elif username != 'admin' and phone[:3] not in ["080", "081", "090", "091", "070"]:
                 st.error("Invalid phone number.")
             elif len(username) < 3:
-                st.error("Username too short.")
+                st.error("Invalid username.")
             elif len(password) < 4:
-                st.error("Password too short (min 4 characters).")
+                st.error("Invalid password.")
             else:
                 try: 
                     with sql.connect(DB_PATH) as conn: 
                         cur = conn.cursor() 
                         cur.execute('SELECT id FROM customer WHERE email = ? OR username = ?', (email, username))
                         if cur.fetchone():
-                            st.error("This email or username is already registered.")
+                            st.error("User exists.")
                         else:
                             cur.execute('SELECT id FROM phone WHERE phone_number = ?', (phone,))
                             if cur.fetchone():
-                                st.error("This phone number is already registered.")
+                                st.error("Phone number exists.")
                             else:
                                 hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
                                 cur.execute("INSERT INTO customer (email, username, password) VALUES (?,?,?)", (email, username, hashed))
@@ -91,7 +91,7 @@ def show_signup():
                                 navigate_to("home")
                                 st.rerun()
                 except sql.Error as err: 
-                    st.error(f"Database Error: {err}")
+                    st.error("Database error.")
     st.button("Back to Home", on_click=navigate_to, args=("home",))
 
 def show_signin():
@@ -105,7 +105,7 @@ def show_signin():
             key = key.strip()
             password = password.strip()
             if not key or not password:
-                st.error("Please enter your email or phone number and password.")
+                st.error("Missing credentials.")
             else:
                 try:
                     with sql.connect(DB_PATH) as conn:
@@ -123,9 +123,9 @@ def show_signin():
                             cid, email, username, stored, aid, acc_no, bal, phone = row
                             if stored is None:
                                 if username == 'admin' and email.lower() == 'admin@gmail.com':
-                                    st.error("Admin password not set. Please manually update DB or set default.")
+                                    st.error("Configuration error.")
                                 else:
-                                    st.error("Account has no password. Contact admin.")
+                                    st.error("Authentication error.")
                             else:
                                 if bcrypt.checkpw(password.encode('utf-8'), stored.encode('utf-8')):
                                     st.session_state.customer_id = cid
@@ -138,9 +138,9 @@ def show_signin():
                                     navigate_to("dashboard")
                                     st.rerun()
                                 else:
-                                    st.error("Incorrect password!")
+                                    st.error("Incorrect password.")
                 except sql.Error as err:
-                    st.error(f"Database Error: {err}")
+                    st.error("Database error.")
     st.button("Back to Home", on_click=navigate_to, args=("home",))
 
 def show_dashboard():
@@ -203,7 +203,7 @@ def show_dashboard():
                 df['Credit'] = df['Credit'].apply(lambda x: f"₦{x:,.2f}")
                 st.dataframe(df, use_container_width=True, hide_index=True)
         except Exception as e:
-            st.error(f"Error loading Trial Balance: {e}")
+            st.error("Error loading Trial Balance.")
 
     elif st.session_state.dash_view == "Subledgers" and is_admin:
         try:
@@ -213,7 +213,7 @@ def show_dashboard():
                 df['Balance'] = df['Balance'].apply(lambda x: f"₦{x:,.2f}")
                 st.dataframe(df, use_container_width=True, hide_index=True)
         except Exception as e:
-            st.error(f"Error loading Subledgers: {e}")
+            st.error("Error loading Subledgers.")
 
     elif st.session_state.dash_view == "Customer Subledger" and is_admin:
         st.info("Feature available directly via database queries for Admin.")
@@ -263,13 +263,13 @@ def show_dashboard():
             if st.form_submit_button("Transfer Funds"):
                 receiver_acct = receiver_acct.strip()
                 if not receiver_acct:
-                    st.error("Please enter the receiver's account number.")
+                    st.error("Missing receiver account.")
                 elif not receiver_acct.isdigit() or len(receiver_acct) != 10:
-                    st.error("Invalid account number. Must be exactly 10 digits.")
+                    st.error("Invalid account number.")
                 elif bank.lower() in ["dave bank", "dave"] and not validate_nuban(receiver_acct):
-                    st.error("Invalid account number for this bank.")
+                    st.error("Invalid account number.")
                 elif receiver_acct == st.session_state.account_no:
-                    st.error("You cannot transfer to your own account.")
+                    st.error("Invalid transfer.")
                 else:
                     extra = {'receiver_bank': bank, 'receiver_acct_no': receiver_acct}
                     if exec_transaction("Transfer", amount, extra=extra, idempotency_key=st.session_state.idempotency_key):
@@ -286,9 +286,9 @@ def show_dashboard():
             if st.form_submit_button("Buy Airtime"):
                 phone = phone.strip()
                 if not phone:
-                    st.error("Please enter a phone number.")
+                    st.error("Missing phone number.")
                 elif not phone.isdigit() or len(phone) != 11:
-                    st.error("Invalid phone number. Must be exactly 11 digits.")
+                    st.error("Invalid phone number.")
                 elif phone[:3] not in ["080", "081", "090", "091", "070"]:
                     st.error("Invalid phone number.")
                 else:
@@ -322,7 +322,7 @@ def show_dashboard():
                     df['Amount'] = df['Amount'].apply(lambda x: f"₦{x:,.2f}")
                     st.dataframe(df, use_container_width=True, hide_index=True)
         except Exception as e:
-            st.error(f"Error loading transactions: {e}")
+            st.error("Error loading transactions.")
 
     elif st.session_state.dash_view == "View Customer Ledger":
         try:
@@ -337,4 +337,4 @@ def show_dashboard():
                     df['Balance'] = df['Balance'].apply(lambda x: f"₦{x:,.2f}")
                     st.dataframe(df, use_container_width=True, hide_index=True)
         except Exception as e:
-            st.error(f"Error loading ledger: {e}")
+            st.error("Error loading ledger.")
