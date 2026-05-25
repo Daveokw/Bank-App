@@ -45,7 +45,13 @@ def show_signup():
         submit = st.form_submit_button("Create Account", type="primary")
         
         if submit:
-            if not validate_email(email):
+            email = email.strip()
+            phone = phone.strip()
+            username = username.strip()
+            password = password.strip()
+            if not email or not phone or not username or not password:
+                st.error("All fields are required.")
+            elif not validate_email(email):
                 st.error("Invalid email format.")
             elif username != 'admin' and (not phone.isdigit() or len(phone) != 11):
                 st.error("Phone number must be exactly 11 digits.")
@@ -54,7 +60,7 @@ def show_signup():
             elif len(username) < 3:
                 st.error("Username too short.")
             elif len(password) < 4:
-                st.error("Password too short (min 4 chars).")
+                st.error("Password too short (min 4 characters).")
             else:
                 try: 
                     with sql.connect(DB_PATH) as conn: 
@@ -80,7 +86,7 @@ def show_signup():
                                 cur.execute("INSERT INTO customer_ledger (ref_no, account_id, debit, credit, balance_after, description, tx_type) VALUES (?,?,?,?,?,?,?)",
                                             (f'OPEN-{uuid.uuid4().hex[:8]}', account_id, 0.00, 0.00, 0.00, 'Opening balance', 'opening'))
                                 conn.commit()
-                                st.success(f"Account created successfully! Your NUBAN Account #: {acct_no}")
+                                st.success(f"Account created successfully! Your Account No: {acct_no}")
                                 time.sleep(3)
                                 navigate_to("home")
                                 st.rerun()
@@ -96,40 +102,45 @@ def show_signin():
         submit = st.form_submit_button("Login", type="primary")
         
         if submit:
-            try:
-                with sql.connect(DB_PATH) as conn:
-                    cur = conn.cursor()
-                    cur.execute('''SELECT c.id, c.email, c.username, c.password, a.id, a.account_no, a.balance, p.phone_number
-                                   FROM customer c
-                                   LEFT JOIN phone p ON c.id=p.customer_id
-                                   JOIN account a ON c.id=a.customer_id
-                                   WHERE c.email=? OR p.phone_number=? LIMIT 1''', (key, key))
-                    row = cur.fetchone()
+            key = key.strip()
+            password = password.strip()
+            if not key or not password:
+                st.error("Please enter your email or phone number and password.")
+            else:
+                try:
+                    with sql.connect(DB_PATH) as conn:
+                        cur = conn.cursor()
+                        cur.execute('''SELECT c.id, c.email, c.username, c.password, a.id, a.account_no, a.balance, p.phone_number
+                                       FROM customer c
+                                       LEFT JOIN phone p ON c.id=p.customer_id
+                                       JOIN account a ON c.id=a.customer_id
+                                       WHERE c.email=? OR p.phone_number=? LIMIT 1''', (key, key))
+                        row = cur.fetchone()
 
-                    if not row:
-                        st.error("Account not found.")
-                    else:
-                        cid, email, username, stored, aid, acc_no, bal, phone = row
-                        if stored is None:
-                            if username == 'admin' and email.lower() == 'admin@gmail.com':
-                                st.error("Admin password not set. Please manually update DB or set default.")
-                            else:
-                                st.error("Account has no password. Contact admin.")
+                        if not row:
+                            st.error("Account not found.")
                         else:
-                            if bcrypt.checkpw(password.encode('utf-8'), stored.encode('utf-8')):
-                                st.session_state.customer_id = cid
-                                st.session_state.email = email
-                                st.session_state.username = username
-                                st.session_state.account_id = aid
-                                st.session_state.account_no = acc_no
-                                st.session_state.balance = Decimal(str(bal))
-                                st.session_state.phone = phone or ""
-                                navigate_to("dashboard")
-                                st.rerun()
+                            cid, email, username, stored, aid, acc_no, bal, phone = row
+                            if stored is None:
+                                if username == 'admin' and email.lower() == 'admin@gmail.com':
+                                    st.error("Admin password not set. Please manually update DB or set default.")
+                                else:
+                                    st.error("Account has no password. Contact admin.")
                             else:
-                                st.error("Incorrect password!")
-            except sql.Error as err:
-                st.error(f"Database Error: {err}")
+                                if bcrypt.checkpw(password.encode('utf-8'), stored.encode('utf-8')):
+                                    st.session_state.customer_id = cid
+                                    st.session_state.email = email
+                                    st.session_state.username = username
+                                    st.session_state.account_id = aid
+                                    st.session_state.account_no = acc_no
+                                    st.session_state.balance = Decimal(str(bal))
+                                    st.session_state.phone = phone or ""
+                                    navigate_to("dashboard")
+                                    st.rerun()
+                                else:
+                                    st.error("Incorrect password!")
+                except sql.Error as err:
+                    st.error(f"Database Error: {err}")
     st.button("Back to Home", on_click=navigate_to, args=("home",))
 
 def show_dashboard():
@@ -218,7 +229,6 @@ def show_dashboard():
         with st.form("deposit_form", clear_on_submit=True):
             amount = st.number_input("Amount to Deposit (₦)", min_value=1.0, step=100.0)
             if st.form_submit_button("Deposit Funds"):
-                st.session_state.balance += Decimal(str(amount))
                 if exec_transaction("Deposit", amount, idempotency_key=st.session_state.idempotency_key):
                     st.success(f"₦{amount:,.2f} deposited successfully!")
                     st.session_state.idempotency_key = str(uuid.uuid4())
@@ -229,69 +239,44 @@ def show_dashboard():
         with st.form("withdraw_form", clear_on_submit=True):
             amount = st.number_input("Amount to Withdraw (₦)", min_value=1.0, step=100.0)
             if st.form_submit_button("Withdraw Funds"):
-                if Decimal(str(amount)) > st.session_state.balance:
-                    st.error("Insufficient Balance!")
-                else:
-                    st.session_state.balance -= Decimal(str(amount))
-                    if exec_transaction("Withdrawal", amount, idempotency_key=st.session_state.idempotency_key):
-                        st.success(f"₦{amount:,.2f} withdrawn successfully!")
-                        st.session_state.idempotency_key = str(uuid.uuid4())
-                        time.sleep(2)
-                        st.rerun()
+                if exec_transaction("Withdrawal", amount, idempotency_key=st.session_state.idempotency_key):
+                    st.success(f"₦{amount:,.2f} withdrawn successfully!")
+                    st.session_state.idempotency_key = str(uuid.uuid4())
+                    time.sleep(2)
+                    st.rerun()
 
     elif st.session_state.dash_view == "Transfer":
         with st.form("transfer_form", clear_on_submit=True):
-            bank = st.text_input("Receiver's Bank")
+            ngn_banks = [
+                "DAVE Bank", "Access Bank", "Citibank Nigeria", "Ecobank Nigeria", "Fidelity Bank", 
+                "First Bank of Nigeria", "First City Monument Bank (FCMB)", "Globus Bank", 
+                "Guaranty Trust Bank (GTBank)", "Heritage Bank", "Jaiz Bank", "Keystone Bank", 
+                "Kuda Bank", "Lotus Bank", "Moniepoint", "Mutual Trust Microfinance Bank", 
+                "Opay", "Palmpay", "Parallex Bank", "Polaris Bank", "PremiumTrust Bank", 
+                "Providus Bank", "Signature Bank", "Stanbic IBTC Bank", "Standard Chartered", 
+                "Sterling Bank", "SunTrust Bank", "TAJBank", "Titan Trust Bank", "Union Bank of Nigeria", 
+                "United Bank for Africa (UBA)", "Unity Bank", "Wema Bank", "Zenith Bank"
+            ]
+            bank = st.selectbox("Receiver's Bank", ngn_banks)
             receiver_acct = st.text_input("Receiver's Account Number (10 digits)")
             amount = st.number_input("Amount to Transfer (₦)", min_value=1.0, step=100.0)
             if st.form_submit_button("Transfer Funds"):
-                if not receiver_acct.isdigit() or len(receiver_acct) != 10:
-                    st.error("Invalid account number! Must be exactly 10 digits.")
-                elif not validate_nuban(receiver_acct) and bank.lower() in ["dave bank", "dave"]:
-                    st.error("Invalid NUBAN account number for this bank. Please check the check digit.")
-                elif Decimal(str(amount)) <= 0:
-                    st.error("Transfer amount must be greater than zero.")
-                elif Decimal(str(amount)) > st.session_state.balance:
-                    st.error("Insufficient Balance!")
+                receiver_acct = receiver_acct.strip()
+                if not receiver_acct:
+                    st.error("Please enter the receiver's account number.")
+                elif not receiver_acct.isdigit() or len(receiver_acct) != 10:
+                    st.error("Invalid account number. Must be exactly 10 digits.")
+                elif bank.lower() in ["dave bank", "dave"] and not validate_nuban(receiver_acct):
+                    st.error("Invalid account number for this bank.")
                 elif receiver_acct == st.session_state.account_no:
                     st.error("You cannot transfer to your own account.")
                 else:
-                    try:
-                        with sql.connect(DB_PATH) as conn:
-                            cur = conn.cursor()
-                            cur.execute("SELECT id FROM account WHERE account_no=? LIMIT 1", (receiver_acct,))
-                            r = cur.fetchone()
-                            receiver_id = r[0] if r else None
-                            
-                            st.session_state.balance -= Decimal(str(amount))
-                            
-                            if receiver_id:
-                                # Internal Transfer Logic
-                                cur.execute("SELECT balance FROM account WHERE id=?", (receiver_id,))
-                                rrow = cur.fetchone()
-                                rbal = Decimal(str(rrow[0]))
-                                new_rbal = rbal + Decimal(str(amount))
-                                cur.execute("UPDATE account SET balance=? WHERE id=?", (float(new_rbal), receiver_id))
-                                
-                                cur.execute("INSERT INTO transaction_record (account_id,transaction_type,amount,date) VALUES (?,?,?,?)",
-                                            (receiver_id, "Transfer", float(amount), datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-                                cur.execute("INSERT INTO ledger (account_id,description,debit,credit,balance,date) VALUES (?,?,?,?,?,?)",
-                                            (receiver_id, "Transfer in", 0.00, float(amount), float(new_rbal), datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-                                conn.commit()
-                                
-                                extra = {'receiver_account_id': receiver_id, 'receiver_acct_no': receiver_acct, 'receiver_bank': bank}
-                                exec_transaction("Transfer", amount, extra=extra, idempotency_key=st.session_state.idempotency_key)
-                            else:
-                                # External Transfer
-                                extra = {'receiver_bank': bank, 'receiver_acct_no': receiver_acct}
-                                exec_transaction("Transfer", amount, extra=extra, idempotency_key=st.session_state.idempotency_key)
-                                
+                    extra = {'receiver_bank': bank, 'receiver_acct_no': receiver_acct}
+                    if exec_transaction("Transfer", amount, extra=extra, idempotency_key=st.session_state.idempotency_key):
                         st.success(f"₦{amount:,.2f} transferred to {receiver_acct} ({bank}).")
                         st.session_state.idempotency_key = str(uuid.uuid4())
                         time.sleep(2)
                         st.rerun()
-                    except sql.Error as e:
-                        st.error(f"DB Error: {e}")
 
     elif st.session_state.dash_view == "Buy Airtime":
         with st.form("airtime_form", clear_on_submit=True):
@@ -299,16 +284,14 @@ def show_dashboard():
             phone = st.text_input("Phone Number (11 digits)")
             amount = st.number_input("Airtime Amount (₦)", min_value=1.0, step=100.0)
             if st.form_submit_button("Buy Airtime"):
-                if not phone.isdigit() or len(phone) != 11:
-                    st.error("Invalid phone number! Must be exactly 11 digits.")
+                phone = phone.strip()
+                if not phone:
+                    st.error("Please enter a phone number.")
+                elif not phone.isdigit() or len(phone) != 11:
+                    st.error("Invalid phone number. Must be exactly 11 digits.")
                 elif phone[:3] not in ["080", "081", "090", "091", "070"]:
                     st.error("Invalid phone number.")
-                elif Decimal(str(amount)) <= 0:
-                    st.error("Airtime amount must be greater than zero.")
-                elif Decimal(str(amount)) > st.session_state.balance:
-                    st.error("Insufficient Balance!")
                 else:
-                    st.session_state.balance -= Decimal(str(amount))
                     extra = {'phone': phone}
                     if exec_transaction("Buy Airtime", amount, extra=extra, idempotency_key=st.session_state.idempotency_key):
                         st.success(f"₦{amount:,.2f} airtime recharged on {network} ({phone}).")
@@ -321,18 +304,12 @@ def show_dashboard():
             bill_type = st.selectbox("Select Bill Type", ["Electricity", "Internet", "Water", "Cable TV"])
             amount = st.number_input("Bill Amount (₦)", min_value=1.0, step=100.0)
             if st.form_submit_button("Pay Bill"):
-                if Decimal(str(amount)) <= 0:
-                    st.error("Bill amount must be greater than zero.")
-                elif Decimal(str(amount)) > st.session_state.balance:
-                    st.error("Insufficient Balance!")
-                else:
-                    st.session_state.balance -= Decimal(str(amount))
-                    extra = {'bill': bill_type}
-                    if exec_transaction("Pay Bills", amount, extra=extra, idempotency_key=st.session_state.idempotency_key):
-                        st.success(f"₦{amount:,.2f} paid for {bill_type}.")
-                        st.session_state.idempotency_key = str(uuid.uuid4())
-                        time.sleep(2)
-                        st.rerun()
+                extra = {'bill': bill_type}
+                if exec_transaction("Pay Bills", amount, extra=extra, idempotency_key=st.session_state.idempotency_key):
+                    st.success(f"₦{amount:,.2f} paid for {bill_type}.")
+                    st.session_state.idempotency_key = str(uuid.uuid4())
+                    time.sleep(2)
+                    st.rerun()
 
     elif st.session_state.dash_view == "Transaction History":
         try:
