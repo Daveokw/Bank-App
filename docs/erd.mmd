@@ -1,0 +1,92 @@
+erDiagram
+    customer ||--o{ phone : has
+    customer ||--o{ account : owns
+    account ||--o{ transaction_record : records
+    account ||--o{ ledger : has
+    account ||--o{ bank_ledger : relates_to
+    account ||--o{ customer_ledger : tracks
+    account ||--o{ customer_subledger : tracks
+    transaction_header ||--|{ bank_ledger : groups
+    subledger_account ||--o{ customer_subledger : categorises
+
+    customer {
+        INTEGER id PK
+        TEXT email UK
+        TEXT username UK
+        TEXT password
+    }
+    phone {
+        INTEGER id PK
+        INTEGER customer_id FK
+        TEXT phone_number UK
+    }
+    account {
+        INTEGER id PK
+        INTEGER customer_id FK
+        TEXT account_no UK
+        REAL balance
+    }
+    transaction_record {
+        INTEGER id PK
+        INTEGER account_id FK
+        TEXT transaction_type
+        REAL amount
+        TEXT idempotency_key UK
+        TEXT date
+    }
+    transaction_header {
+        INTEGER id PK
+        TEXT ref_no UK
+        TEXT status
+        TEXT idempotency_key UK
+        TEXT created_at
+    }
+    ledger {
+        INTEGER id PK
+        INTEGER account_id FK
+        TEXT description
+        REAL debit
+        REAL credit
+        REAL balance
+        TEXT date
+    }
+    bank_ledger {
+        INTEGER id PK
+        TEXT ref_no FK
+        TEXT account_name
+        REAL debit
+        REAL credit
+        INTEGER account_id FK
+        TEXT tx_type
+        TEXT created_at
+    }
+    customer_ledger {
+        INTEGER id PK
+        TEXT ref_no
+        INTEGER account_id FK
+        REAL debit
+        REAL credit
+        REAL balance_after
+        TEXT created_at
+    }
+    subledger_account {
+        INTEGER id PK
+        TEXT account_name UK
+        TEXT account_type
+        REAL balance
+        TEXT description
+    }
+    customer_subledger {
+        INTEGER id PK
+        TEXT ref_no
+        INTEGER account_id FK
+        INTEGER subledger_account_id FK
+        REAL debit
+        REAL credit
+        REAL balance_after
+        TEXT created_at
+    }
+    system_config {
+        TEXT key PK
+        TEXT value
+    }

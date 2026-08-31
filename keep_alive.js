@@ -1,53 +1,112 @@
 const { chromium } = require('playwright');
 
-(async () => {
-  const url = process.argv[2];
-  if (!url) {
-    console.error("Error: Please provide a URL as an argument.");
-    process.exit(1);
+const DEFAULT_ALLOWED_HOST = 'dbank-app.streamlit.app';
+const APP_HEADING = 'DAVE Bank';
+const FAILURE_SCREENSHOT = 'keep_alive_screenshot.png';
+const INITIAL_STATE_TIMEOUT_MS = 120000;
+const WAKE_TIMEOUT_MS = 300000;
+const CONNECTION_HOLD_MS = 15000;
+
+function validatedTarget(rawValue) {
+  if (!rawValue) {
+    throw new Error('A target URL is required.');
   }
 
-  console.log(`Starting keep-alive check for: ${url}`);
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-  });
-  const page = await context.newPage();
-
-  try {
-    console.log("Navigating to the app URL...");
-    // Streamlit apps can be slow to initialize, so we use a generous timeout
-    await page.goto(url, { waitUntil: 'networkidle', timeout: 90000 });
-  } catch (err) {
-    console.log("Note: Page load timed out or encountered an error, checking for sleep indicators anyway:", err.message);
+  const target = new URL(rawValue);
+  if (target.protocol !== 'https:') {
+    throw new Error('The availability check requires HTTPS.');
   }
 
-  // Wait a bit to ensure the sleep screen has fully rendered if present
-  await page.waitForTimeout(10000);
+  const allowedHost = process.env.KEEP_ALIVE_ALLOWED_HOST || DEFAULT_ALLOWED_HOST;
+  if (target.hostname !== allowedHost) {
+    throw new Error(`The target host must be ${allowedHost}.`);
+  }
 
-  try {
-    // Check for the sleep page title or the "Yes, get this app back up!" button
-    const wakeUpButton = page.locator('button:has-text("Yes, get this app back up!")');
-    
-    if (await wakeUpButton.count() > 0) {
-      console.log("App is asleep! Clicking the 'Yes, get this app back up!' button...");
-      await wakeUpButton.click();
-      console.log("Clicked! Waiting 60 seconds for the app to wake up and spin up resources...");
-      await page.waitForTimeout(60000);
-      console.log("Wake up process triggered successfully!");
-    } else {
-      console.log("App is already awake! No sleep button was found.");
+  target.username = '';
+  target.password = '';
+  target.hash = '';
+  return target.toString();
+}
+
+async function waitForState(page, timeoutMs) {
+  const appHeading = page.getByRole('heading').filter({ hasText: APP_HEADING }).first();
+  const wakeUpButton = page.getByRole('button', {
+    name: /get this app back up/i,
+  }).first();
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    if (await appHeading.isVisible()) {
+      return { state: 'ready', appHeading, wakeUpButton };
     }
-  } catch (err) {
-    console.error("An error occurred during wake-up checking:", err.message);
+    if (await wakeUpButton.isVisible()) {
+      return { state: 'sleeping', appHeading, wakeUpButton };
+    }
+    await page.waitForTimeout(1000);
+  }
+
+  throw new Error('Neither the application nor the Streamlit wake-up control became visible.');
+}
+
+async function waitForApplication(appHeading, page, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await appHeading.isVisible()) {
+      return;
+    }
+    await page.waitForTimeout(1000);
+  }
+  throw new Error('The application did not become ready after the wake-up request.');
+}
+
+async function run() {
+  let browser;
+  let page;
+
+  try {
+    const target = validatedTarget(process.argv[2]);
+    console.log('Starting the DAVE Bank availability check.');
+
+    browser = await chromium.launch({ headless: true });
+    const context = await browser.newContext();
+    page = await context.newPage();
+
+    const response = await page.goto(target, {
+      waitUntil: 'domcontentloaded',
+      timeout: 90000,
+    });
+    if (response && response.status() >= 400) {
+      throw new Error(`The app returned HTTP ${response.status()}.`);
+    }
+
+    const result = await waitForState(page, INITIAL_STATE_TIMEOUT_MS);
+    if (result.state === 'sleeping') {
+      console.log('The app is asleep; submitting the wake-up request.');
+      await result.wakeUpButton.click({ timeout: 10000 });
+      await waitForApplication(result.appHeading, page, WAKE_TIMEOUT_MS);
+    }
+
+    await page.waitForTimeout(CONNECTION_HOLD_MS);
+    if (!(await result.appHeading.isVisible())) {
+      throw new Error('The application became unavailable during verification.');
+    }
+
+    console.log('The application interface is visible and responsive.');
+  } catch (error) {
+    console.error(`Availability check failed: ${error.message}`);
+    process.exitCode = 1;
+    if (page) {
+      try {
+        await page.screenshot({ path: FAILURE_SCREENSHOT, fullPage: true });
+      } catch (screenshotError) {
+        console.error(`Failure screenshot could not be saved: ${screenshotError.message}`);
+      }
+    }
   } finally {
-    try {
-      await page.screenshot({ path: 'keep_alive_screenshot.png' });
-      console.log("Screenshot saved as keep_alive_screenshot.png.");
-    } catch (ssErr) {
-      console.log("Could not take screenshot:", ssErr.message);
+    if (browser) {
+      await browser.close();
     }
-    await browser.close();
-    console.log("Keep-alive run finished successfully.");
   }
-})();
+}
+
+run();

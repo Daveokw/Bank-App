@@ -1,82 +1,167 @@
-# Banking Web Application
+# DAVE Bank
 
-A full-featured banking web application prototype built with **Python**, **Streamlit**, and **SQLite**. This project demonstrates advanced core banking operations including a double-entry ledger system, automated NUBAN account generation, Nigerian banking standards, and a comprehensive administrative dashboard.
+A Streamlit and SQLite banking demonstration built around atomic transactions, idempotency controls, customer ledgers, and double-entry accounting.
 
-## Features
+[Open the live application](https://dbank-app.streamlit.app/)
 
-### Core Banking & Nigerian Standards
-- **NUBAN Account Generation:** Automatically assigns a valid 10-digit NUBAN account number upon user registration.
-- **Secure Authentication:** User accounts are protected using industry-standard `bcrypt` password hashing with automatically generated salts.
+## What the application demonstrates
 
-### Financial Engineering & Backend Architecture
-- **Transaction State Machine:** Transactions are processed through strict states (`PENDING` -> `COMMITTED` -> `REVERSED`).
-- **Database-Level Validations:** The SQLite database utilizes rigorous `TRIGGER` constraints. At the exact moment a transaction attempts to commit, the database calculates `SUM(debit) - SUM(credit)`. If the ledger is not perfectly balanced (zero), the database forcefully issues an `ABORT` and rolls back the transaction. This guarantees it is mathematically impossible to record an unbalanced entry regardless of application-level bugs.
-- **Idempotency Keys (Double-Charge Protection):** Implements unique UUID idempotency keys passed from the frontend session state. This ensures that network latency or double-clicks do not result in duplicate ledger entries or double charges.
-- **Structured Audit Logging:** Utilizes Python's native `logging` library to maintain a precise, structured audit trail (`bank_app.log`) of every transaction attempt, success, and failure for observability.
+- Customer registration and bcrypt password hashing
+- NUBAN-style 10-digit demonstration account numbers
+- Deposits, withdrawals, internal and external transfers, airtime, and bills
+- Idempotency keys that prevent repeated form submissions from charging twice
+- Atomic SQLite transactions with foreign keys, write locking, and rollback on failure
+- Balanced journal validation before a transaction can be committed
+- Customer transaction history, account ledger, and subledger records
+- Administrative trial balance, subledger inspection, customer subledger, and reconciliation views
+- Automatic demonstration-data refresh after 24 hours
 
-### Transactions & Accounting
-- **Double-Entry Ledger:** Every transaction (Deposit, Withdrawal, Transfer, Airtime, Bills) automatically creates balanced debit and credit entries across underlying subledger accounts (e.g., Cash, Customer Deposits, Airtime Payable).
-- **Fund Transfers:** Supports both internal transfers to other users and external transfers.
-- **Transaction History & Ledger:** Users can view a simplified transaction history as well as a detailed, professional customer ledger showing every accounting entry.
+This is a portfolio demonstration. It does not connect to a payment network, hold funds, or provide real banking services.
 
-### Administrative Dashboard
-An exclusive admin panel (accessible by logging in as `admin@gmail.com`) providing oversight:
-- **Global Trial Balance:** Ensures debits and credits across the entire bank are perfectly balanced.
-- **Subledgers View:** View balances for all bank internal accounts (Cash, Equity, Revenue, Interbank Payables, etc.).
+## Architecture
 
-## Database Schema (ERD)
+GitHub renders the ERD below automatically. Its reusable Mermaid source is also available in [`docs/erd.mmd`](docs/erd.mmd); paste that file into [Mermaid Live](https://mermaid.live/) to export an SVG or PNG.
 
-The core architecture revolves around separating customer accounts from the double-entry accounting ledgers.
+```mermaid
+erDiagram
+    customer ||--o{ phone : has
+    customer ||--o{ account : owns
+    account ||--o{ transaction_record : records
+    account ||--o{ ledger : has
+    account ||--o{ bank_ledger : relates_to
+    account ||--o{ customer_ledger : tracks
+    account ||--o{ customer_subledger : tracks
+    transaction_header ||--|{ bank_ledger : groups
+    subledger_account ||--o{ customer_subledger : categorises
 
-![Database Schema ERD](erd.png)
+    customer {
+        INTEGER id PK
+        TEXT email UK
+        TEXT username UK
+        TEXT password
+    }
+    phone {
+        INTEGER id PK
+        INTEGER customer_id FK
+        TEXT phone_number UK
+    }
+    account {
+        INTEGER id PK
+        INTEGER customer_id FK
+        TEXT account_no UK
+        REAL balance
+    }
+    transaction_record {
+        INTEGER id PK
+        INTEGER account_id FK
+        TEXT transaction_type
+        REAL amount
+        TEXT idempotency_key UK
+        TEXT date
+    }
+    transaction_header {
+        INTEGER id PK
+        TEXT ref_no UK
+        TEXT status
+        TEXT idempotency_key UK
+        TEXT created_at
+    }
+    ledger {
+        INTEGER id PK
+        INTEGER account_id FK
+        TEXT description
+        REAL debit
+        REAL credit
+        REAL balance
+        TEXT date
+    }
+    bank_ledger {
+        INTEGER id PK
+        TEXT ref_no FK
+        TEXT account_name
+        REAL debit
+        REAL credit
+        INTEGER account_id FK
+        TEXT tx_type
+        TEXT created_at
+    }
+    customer_ledger {
+        INTEGER id PK
+        TEXT ref_no
+        INTEGER account_id FK
+        REAL debit
+        REAL credit
+        REAL balance_after
+        TEXT created_at
+    }
+    subledger_account {
+        INTEGER id PK
+        TEXT account_name UK
+        TEXT account_type
+        REAL balance
+        TEXT description
+    }
+    customer_subledger {
+        INTEGER id PK
+        TEXT ref_no
+        INTEGER account_id FK
+        INTEGER subledger_account_id FK
+        REAL debit
+        REAL credit
+        REAL balance_after
+        TEXT created_at
+    }
+    system_config {
+        TEXT key PK
+        TEXT value
+    }
+```
 
-## Tech Stack & Architecture Decisions
+## Run locally
 
-| Component | Technology |
-|-----------|------------|
-| Language  | Python 3 |
-| Frontend  | Streamlit |
-| Database  | SQLite (built-in) |
-| Data manipulation | Pandas |
+Python 3.11 or later is recommended.
 
-**Why SQLite?**
-While enterprise financial systems typically rely on robust RDBMS engines like PostgreSQL or Oracle (which can easily be deployed in modern cloud environments), **SQLite** was intentionally chosen for this specific prototype. By using a lightweight, built-in database, I was able to demonstrate rigorous financial constraints (like `BEFORE UPDATE` triggers, transaction state machines, and relational integrity) in a zero-configuration environment. This ensures the prototype is instantly deployable—anyone can clone the repository or test the live Streamlit app without needing to provision external database servers or configure connection strings just to verify the underlying logic.
+```bash
+git clone https://github.com/Daveokw/Bank-App.git
+cd Bank-App
+python -m venv .venv
+```
 
+Activate the environment, then install and run the application:
 
-## Getting Started
+```bash
+python -m pip install -r requirements.txt
+streamlit run app.py
+```
 
-### Prerequisites
+The SQLite database is created on first use and is excluded from Git.
 
-- **Python 3.8+** installed on your machine
-- Required Python libraries: `streamlit`, `pandas`
+## Administrative access
 
-### Installation
+Administrative access is disabled unless a password is configured. For local development, create `.streamlit/secrets.toml`:
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/Daveokw/Bank-App.git
-   cd Bank-App
-   ```
+```toml
+BANK_ADMIN_PASSWORD = "replace-with-a-strong-password"
+```
 
-2. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+The password must contain 12–72 bytes. Sign in with `admin@gmail.com` and the configured password. On Streamlit Community Cloud, add the same key through the application's Secrets settings instead of committing it.
 
-3. **Run the application**
-   ```bash
-   streamlit run app.py
-   ```
+## Validation
 
-   That's it! The SQLite database (`bank_app.db`) will be created automatically on the first run.
+```bash
+python -m unittest discover -s tests -v
+python -m py_compile app.py db.py engine.py screens.py
+```
 
-## Automated Keep-Alive
-This repository includes a built-in GitHub Actions workflow (`.github/workflows/keep_alive.yml`) powered by Playwright to automatically prevent the application from sleeping when deployed on Streamlit Community Cloud.
+## Streamlit deployment
 
-## Notes
-- This is an **advanced portfolio project** designed to showcase backend logic, double-entry accounting principles, and responsive Python web development.
-- **Auto-Reset:** Because this is a demonstration prototype designed to be kept alive indefinitely in the cloud, the database is programmed to **automatically reset every 24 hours** in the background. The automated GitHub Actions keep-alive script seamlessly triggers this cycle behind the scenes, ensuring a completely fresh testing environment each day. As a safety fallback, if a user happens to be actively exploring the app at the exact moment the 24-hour timer expires, they are safely redirected to the login screen to prevent data conflicts.
-- The `bank_app.db` file is generated locally and ignored by Git. If deployed, the database is recreated fresh in the cloud environment.
+Deploy `app.py` from the repository root. Python dependencies are declared in `requirements.txt`; no Linux system packages are required.
 
-## License
-This project is open source and available for educational and portfolio purposes.
+The GitHub Actions availability workflow checks the deployed interface every four hours at an off-peak minute. It can wake a sleeping app and fails if the real DAVE Bank interface does not load. GitHub schedules are best-effort, so this reduces—but cannot eliminate—the possibility of Community Cloud hibernation.
+
+## Data and security limitations
+
+- SQLite storage on Streamlit Community Cloud is ephemeral and is not suitable for production banking data.
+- The database is refreshed on the first application run after it becomes 24 hours old; it is not a background job.
+- Monetary inputs are normalised to two decimal places, but this prototype retains SQLite `REAL` columns for compatibility. Production systems should store integer minor units or use a database-native fixed-precision decimal type.
+- Authentication and accounting controls are demonstrations and have not undergone a formal security or financial audit.

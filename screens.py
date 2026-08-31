@@ -1,340 +1,586 @@
-import streamlit as st
+"""Streamlit views for the DAVE Bank demonstration application."""
+
+from __future__ import annotations
+
+import logging
 import sqlite3 as sql
-import pandas as pd
-import bcrypt
-import uuid
 import time
+import uuid
 from decimal import Decimal
-from datetime import datetime
-from db import DB_PATH
+
+import bcrypt
+import pandas as pd
+import streamlit as st
+
+from db import ADMIN_EMAIL, ADMIN_USERNAME, get_connection, utc_now
 from engine import (
-    validate_email, gen_account_no, validate_nuban, exec_transaction
+    exec_transaction,
+    gen_account_no,
+    validate_email,
+    validate_nuban,
+    validate_password,
+    validate_phone,
+    validate_username,
 )
 
-def navigate_to(page):
+LOGGER = logging.getLogger(__name__)
+NAIRA = "₦"
+LOGIN_ATTEMPT_LIMIT = 5
+LOGIN_LOCK_SECONDS = 30
+
+NIGERIAN_BANKS = (
+    "DAVE Bank",
+    "Access Bank",
+    "Citibank Nigeria",
+    "Ecobank Nigeria",
+    "Fidelity Bank",
+    "First Bank of Nigeria",
+    "First City Monument Bank (FCMB)",
+    "Globus Bank",
+    "Guaranty Trust Bank (GTBank)",
+    "Heritage Bank",
+    "Jaiz Bank",
+    "Keystone Bank",
+    "Kuda Bank",
+    "Lotus Bank",
+    "Moniepoint",
+    "Mutual Trust Microfinance Bank",
+    "Opay",
+    "Palmpay",
+    "Parallex Bank",
+    "Polaris Bank",
+    "PremiumTrust Bank",
+    "Providus Bank",
+    "Signature Bank",
+    "Stanbic IBTC Bank",
+    "Standard Chartered",
+    "Sterling Bank",
+    "SunTrust Bank",
+    "TAJBank",
+    "Titan Trust Bank",
+    "Union Bank of Nigeria",
+    "United Bank for Africa (UBA)",
+    "Unity Bank",
+    "Wema Bank",
+    "Zenith Bank",
+)
+
+
+def navigate_to(page: str) -> None:
     st.session_state.page = page
 
-def refresh_balance():
-    if st.session_state.account_id:
-        with sql.connect(DB_PATH) as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT balance FROM account WHERE id=?", (st.session_state.account_id,))
-            res = cur.fetchone()
-            if res:
-                st.session_state.balance = Decimal(str(res[0]))
 
-def show_home():
-    st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🏦 Welcome to DAVE Bank</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #4B5563;'>Your trusted partner for all financial transactions.</p>", unsafe_allow_html=True)
-    
-    st.divider()
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.button("Sign In", use_container_width=True, type="primary", on_click=navigate_to, args=("signin",))
-    with col2:
-        st.button("Sign Up", use_container_width=True, on_click=navigate_to, args=("signup",))
+def _currency(value) -> str:
+    return f"{NAIRA}{Decimal(str(value or 0)):,.2f}"
 
-def show_signup():
-    st.title("Sign Up")
+
+def _new_idempotency_key() -> str:
+    return str(uuid.uuid4())
+
+
+def _is_admin() -> bool:
+    return (
+        st.session_state.username == ADMIN_USERNAME
+        and str(st.session_state.email).casefold() == ADMIN_EMAIL
+    )
+
+
+def refresh_balance() -> bool:
+    account_id = st.session_state.account_id
+    if not account_id:
+        return False
+    with get_connection() as connection:
+        row = connection.execute(
+            "SELECT balance FROM account WHERE id = ?", (account_id,)
+        ).fetchone()
+    if not row:
+        return False
+    st.session_state.balance = Decimal(str(row["balance"]))
+    return True
+
+
+def show_home() -> None:
+    st.title("DAVE Bank")
+    st.subheader("A double-entry banking demonstration")
+    st.write(
+        "Explore account creation, deposits, withdrawals, transfers, airtime, "
+        "bill payments, customer ledgers, and administrative reconciliation."
+    )
+    st.info(
+        "Demonstration only: this application does not connect to real banks or process real money."
+    )
+
+    sign_in, sign_up = st.columns(2)
+    with sign_in:
+        st.button(
+            "Sign in",
+            type="primary",
+            use_container_width=True,
+            on_click=navigate_to,
+            args=("signin",),
+        )
+    with sign_up:
+        st.button(
+            "Create an account",
+            use_container_width=True,
+            on_click=navigate_to,
+            args=("signup",),
+        )
+
+
+def show_signup() -> None:
+    st.title("Create an account")
+    st.caption("All fields are required. Passwords must contain at least eight characters.")
+
     with st.form("signup_form"):
-        email = st.text_input("Email Address")
-        phone = st.text_input("Phone Number (11 digits)")
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
-        submit = st.form_submit_button("Create Account", type="primary")
-        
-        if submit:
-            email = email.strip()
-            phone = phone.strip()
-            username = username.strip()
-            password = password.strip()
-            if not email or not phone or not username or not password:
-                st.error("Missing fields.")
-            elif not validate_email(email):
-                st.error("Invalid email.")
-            elif username != 'admin' and (not phone.isdigit() or len(phone) != 11):
-                st.error("Invalid phone number.")
-            elif username != 'admin' and phone[:3] not in ["080", "081", "090", "091", "070"]:
-                st.error("Invalid phone number.")
-            elif len(username) < 3:
-                st.error("Invalid username.")
-            elif len(password) < 4:
-                st.error("Invalid password.")
-            else:
-                try: 
-                    with sql.connect(DB_PATH) as conn: 
-                        cur = conn.cursor() 
-                        cur.execute('SELECT id FROM customer WHERE email = ? OR username = ?', (email, username))
-                        if cur.fetchone():
-                            st.error("User exists.")
-                        else:
-                            cur.execute('SELECT id FROM phone WHERE phone_number = ?', (phone,))
-                            if cur.fetchone():
-                                st.error("Phone number exists.")
-                            else:
-                                hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-                                cur.execute("INSERT INTO customer (email, username, password) VALUES (?,?,?)", (email, username, hashed))
-                                cust_id = cur.lastrowid
-                                if phone:
-                                    cur.execute("INSERT INTO phone (customer_id, phone_number) VALUES (?,?)", (cust_id, phone))
-                                acct_no = gen_account_no(cust_id)
-                                cur.execute("INSERT INTO account (customer_id, account_no) VALUES (?,?)", (cust_id, acct_no))
-                                account_id = cur.lastrowid
-                                cur.execute("INSERT INTO ledger (account_id, description, debit, credit, balance) VALUES (?,?,?,?,?)",
-                                            (account_id, 'Opening Balance', 0.00, 0.00, 0.00))
-                                cur.execute("INSERT INTO customer_ledger (ref_no, account_id, debit, credit, balance_after, description, tx_type) VALUES (?,?,?,?,?,?,?)",
-                                            (f'OPEN-{uuid.uuid4().hex[:8]}', account_id, 0.00, 0.00, 0.00, 'Opening balance', 'opening'))
-                                conn.commit()
-                                st.success(f"Account created successfully! Your Account No: {acct_no}")
-                                time.sleep(3)
-                                navigate_to("home")
-                                st.rerun()
-                except sql.Error as err: 
-                    st.error("Database error.")
-    st.button("Back to Home", on_click=navigate_to, args=("home",))
+        email = st.text_input("Email address", max_chars=254)
+        phone = st.text_input("Phone number", max_chars=11, help="Enter an 11-digit Nigerian mobile number.")
+        username = st.text_input("Username", max_chars=30)
+        password = st.text_input("Password", type="password", max_chars=72)
+        submitted = st.form_submit_button("Create account", type="primary")
 
-def show_signin():
-    st.title("Sign In")
+    if submitted:
+        email = email.strip().casefold()
+        phone = phone.strip()
+        username = username.strip()
+        if not all((email, phone, username, password)):
+            st.error("Complete all fields.")
+        elif not validate_email(email):
+            st.error("Enter a valid email address.")
+        elif not validate_phone(phone):
+            st.error("Enter a valid 11-digit Nigerian mobile number.")
+        elif not validate_username(username) or username.casefold() == ADMIN_USERNAME:
+            st.error("Use 3–30 letters, numbers, dots, underscores, or hyphens for the username.")
+        elif not validate_password(password):
+            st.error("Use a password containing 8–72 bytes.")
+        else:
+            try:
+                with get_connection() as connection:
+                    connection.execute("BEGIN IMMEDIATE")
+                    existing = connection.execute(
+                        """
+                        SELECT 1 FROM customer WHERE email = ? OR username = ?
+                        UNION ALL
+                        SELECT 1 FROM phone WHERE phone_number = ?
+                        LIMIT 1
+                        """,
+                        (email, username, phone),
+                    ).fetchone()
+                    if existing:
+                        st.error("An account already uses those details.")
+                    else:
+                        password_hash = bcrypt.hashpw(
+                            password.encode("utf-8"), bcrypt.gensalt()
+                        ).decode("utf-8")
+                        cursor = connection.execute(
+                            "INSERT INTO customer (email, username, password) VALUES (?, ?, ?)",
+                            (email, username, password_hash),
+                        )
+                        customer_id = cursor.lastrowid
+                        connection.execute(
+                            "INSERT INTO phone (customer_id, phone_number) VALUES (?, ?)",
+                            (customer_id, phone),
+                        )
+                        account_no = gen_account_no(customer_id)
+                        account_cursor = connection.execute(
+                            "INSERT INTO account (customer_id, account_no) VALUES (?, ?)",
+                            (customer_id, account_no),
+                        )
+                        opening_reference = f"OPEN-{uuid.uuid4().hex[:8].upper()}"
+                        timestamp = utc_now()
+                        connection.execute(
+                            """
+                            INSERT INTO ledger (
+                                account_id, description, debit, credit, balance, date
+                            ) VALUES (?, 'Opening Balance', 0.00, 0.00, 0.00, ?)
+                            """,
+                            (account_cursor.lastrowid, timestamp),
+                        )
+                        connection.execute(
+                            """
+                            INSERT INTO customer_ledger (
+                                ref_no, account_id, debit, credit, balance_after,
+                                description, tx_type, created_at
+                            ) VALUES (?, ?, 0.00, 0.00, 0.00, 'Opening balance', 'opening', ?)
+                            """,
+                            (opening_reference, account_cursor.lastrowid, timestamp),
+                        )
+                        connection.commit()
+                        st.session_state.flash_message = (
+                            f"Account created. Your account number is {account_no}."
+                        )
+                        navigate_to("signin")
+                        st.rerun()
+            except sql.Error:
+                LOGGER.exception("Account creation failed")
+                st.error("The account could not be created.")
+
+    st.button("Back", on_click=navigate_to, args=("home",))
+
+
+def _record_failed_login() -> None:
+    attempts = int(st.session_state.get("login_attempts", 0)) + 1
+    st.session_state.login_attempts = attempts
+    if attempts >= LOGIN_ATTEMPT_LIMIT:
+        st.session_state.login_locked_until = time.time() + LOGIN_LOCK_SECONDS
+        st.session_state.login_attempts = 0
+
+
+def show_signin() -> None:
+    st.title("Sign in")
+    locked_until = float(st.session_state.get("login_locked_until", 0))
+    remaining = max(0, int(locked_until - time.time()))
+    if remaining:
+        st.warning(f"Too many attempts. Try again in {remaining} seconds.")
+
     with st.form("signin_form"):
-        key = st.text_input("Email or Phone")
-        password = st.text_input("Password", type="password")
-        submit = st.form_submit_button("Login", type="primary")
-        
-        if submit:
-            key = key.strip()
-            password = password.strip()
-            if not key or not password:
-                st.error("Missing credentials.")
+        key = st.text_input("Email address or phone number")
+        password = st.text_input("Password", type="password", max_chars=72)
+        submitted = st.form_submit_button(
+            "Sign in", type="primary", disabled=bool(remaining)
+        )
+
+    if submitted and not remaining:
+        key = key.strip().casefold()
+        if not key or not password:
+            st.error("Enter your credentials.")
+        else:
+            try:
+                with get_connection() as connection:
+                    row = connection.execute(
+                        """
+                        SELECT
+                            c.id AS customer_id, c.email, c.username, c.password,
+                            a.id AS account_id, a.account_no, a.balance,
+                            p.phone_number
+                        FROM customer AS c
+                        LEFT JOIN phone AS p ON p.customer_id = c.id
+                        JOIN account AS a ON a.customer_id = c.id
+                        WHERE LOWER(c.email) = ? OR p.phone_number = ?
+                        LIMIT 1
+                        """,
+                        (key, key),
+                    ).fetchone()
+
+                admin_login = bool(
+                    row
+                    and row["username"] == ADMIN_USERNAME
+                    and row["email"].casefold() == ADMIN_EMAIL
+                )
+                if admin_login and not st.session_state.admin_enabled:
+                    st.error("Administrative access is not configured.")
+                elif row and bcrypt.checkpw(
+                    password.encode("utf-8"), row["password"].encode("utf-8")
+                ):
+                    st.session_state.update(
+                        customer_id=row["customer_id"],
+                        email=row["email"],
+                        username=row["username"],
+                        account_id=row["account_id"],
+                        account_no=row["account_no"],
+                        balance=Decimal(str(row["balance"])),
+                        phone=row["phone_number"] or "",
+                        login_attempts=0,
+                        login_locked_until=0,
+                    )
+                    navigate_to("dashboard")
+                    st.rerun()
+                else:
+                    _record_failed_login()
+                    st.error("The credentials are incorrect.")
+            except (sql.Error, ValueError):
+                LOGGER.exception("Sign-in failed")
+                st.error("Sign-in is temporarily unavailable.")
+
+    st.button("Back", on_click=navigate_to, args=("home",))
+
+
+def _set_dashboard_view(view: str) -> None:
+    st.session_state.dash_view = view
+    st.session_state.idempotency_key = _new_idempotency_key()
+
+
+def _sign_out() -> None:
+    st.session_state.clear()
+    st.session_state.page = "home"
+
+
+def _customer_options() -> dict[str, int]:
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT a.id, a.account_no, c.username
+            FROM account AS a
+            JOIN customer AS c ON c.id = a.customer_id
+            WHERE c.username <> ?
+            ORDER BY c.username, a.account_no
+            """,
+            (ADMIN_USERNAME,),
+        ).fetchall()
+    return {f"{row['username']} — {row['account_no']}": row["id"] for row in rows}
+
+
+def _show_admin_view(view: str) -> None:
+    if view == "Trial Balance":
+        with get_connection() as connection:
+            frame = pd.read_sql_query(
+                """
+                SELECT account_name AS Account, SUM(debit) AS Debit, SUM(credit) AS Credit
+                FROM bank_ledger
+                GROUP BY account_name
+                ORDER BY account_name
+                """,
+                connection,
+            )
+        total_debit = Decimal(str(frame["Debit"].sum() if not frame.empty else 0))
+        total_credit = Decimal(str(frame["Credit"].sum() if not frame.empty else 0))
+        debit_column, credit_column, difference_column = st.columns(3)
+        debit_column.metric("Total debits", _currency(total_debit))
+        credit_column.metric("Total credits", _currency(total_credit))
+        difference_column.metric("Difference", _currency(total_debit - total_credit))
+        if frame.empty:
+            st.info("No committed transactions are available.")
+        else:
+            frame["Debit"] = frame["Debit"].map(_currency)
+            frame["Credit"] = frame["Credit"].map(_currency)
+            st.dataframe(frame, use_container_width=True, hide_index=True)
+        return
+
+    if view == "Subledgers":
+        with get_connection() as connection:
+            frame = pd.read_sql_query(
+                """
+                SELECT account_name AS Name, account_type AS Type,
+                       balance AS Balance, description AS Description
+                FROM subledger_account
+                ORDER BY account_type, account_name
+                """,
+                connection,
+            )
+        frame["Balance"] = frame["Balance"].map(_currency)
+        st.dataframe(frame, use_container_width=True, hide_index=True)
+        return
+
+    options = _customer_options()
+    if not options:
+        st.info("No customer accounts are available.")
+        return
+    selected = st.selectbox("Customer account", tuple(options))
+    account_id = options[selected]
+
+    if view == "Customer Subledger":
+        with get_connection() as connection:
+            frame = pd.read_sql_query(
+                """
+                SELECT cs.created_at AS Date, sa.account_name AS Subledger,
+                       cs.description AS Description, cs.debit AS Debit,
+                       cs.credit AS Credit, cs.balance_after AS Balance
+                FROM customer_subledger AS cs
+                JOIN subledger_account AS sa ON sa.id = cs.subledger_account_id
+                WHERE cs.account_id = ?
+                ORDER BY cs.id DESC
+                """,
+                connection,
+                params=(account_id,),
+            )
+        if frame.empty:
+            st.info("No customer subledger entries are available.")
+        else:
+            for column in ("Debit", "Credit", "Balance"):
+                frame[column] = frame[column].map(_currency)
+            st.dataframe(frame, use_container_width=True, hide_index=True)
+        return
+
+    with get_connection() as connection:
+        account = connection.execute(
+            "SELECT balance FROM account WHERE id = ?", (account_id,)
+        ).fetchone()
+        control = connection.execute(
+            """
+            SELECT cs.balance_after
+            FROM customer_subledger AS cs
+            JOIN subledger_account AS sa ON sa.id = cs.subledger_account_id
+            WHERE cs.account_id = ? AND sa.account_name = 'Customer_Deposits'
+            ORDER BY cs.id DESC
+            LIMIT 1
+            """,
+            (account_id,),
+        ).fetchone()
+    account_balance = Decimal(str(account["balance"] if account else 0))
+    control_balance = Decimal(str(control["balance_after"] if control else 0))
+    difference = account_balance - control_balance
+    left, middle, right = st.columns(3)
+    left.metric("Account balance", _currency(account_balance))
+    middle.metric("Control balance", _currency(control_balance))
+    right.metric("Difference", _currency(difference))
+    if difference.quantize(Decimal("0.01")) == 0:
+        st.success("The customer account reconciles with the deposits subledger.")
+    else:
+        st.error("The customer account does not reconcile with the deposits subledger.")
+
+
+def _run_customer_transaction(
+    transaction_type: str,
+    amount,
+    *,
+    extra: dict | None = None,
+) -> None:
+    if exec_transaction(
+        transaction_type,
+        amount,
+        extra=extra,
+        idempotency_key=st.session_state.idempotency_key,
+    ):
+        st.session_state.idempotency_key = _new_idempotency_key()
+        st.session_state.flash_message = f"{transaction_type} completed successfully."
+        st.rerun()
+
+
+def _show_customer_view(view: str) -> None:
+    if view == "Check Balance":
+        st.metric("Current balance", _currency(st.session_state.balance))
+    elif view == "Deposit":
+        with st.form("deposit_form", clear_on_submit=True):
+            amount = st.number_input(f"Amount ({NAIRA})", min_value=1.0, step=100.0)
+            submitted = st.form_submit_button("Deposit funds", type="primary")
+        if submitted:
+            _run_customer_transaction("Deposit", amount)
+    elif view == "Withdraw":
+        with st.form("withdraw_form", clear_on_submit=True):
+            amount = st.number_input(f"Amount ({NAIRA})", min_value=1.0, step=100.0)
+            submitted = st.form_submit_button("Withdraw funds", type="primary")
+        if submitted:
+            _run_customer_transaction("Withdrawal", amount)
+    elif view == "Transfer":
+        with st.form("transfer_form", clear_on_submit=True):
+            bank = st.selectbox("Receiver's bank", NIGERIAN_BANKS)
+            receiver_account = st.text_input("Receiver's account number", max_chars=10)
+            amount = st.number_input(f"Amount ({NAIRA})", min_value=1.0, step=100.0)
+            submitted = st.form_submit_button("Transfer funds", type="primary")
+        if submitted:
+            receiver_account = receiver_account.strip()
+            if len(receiver_account) != 10 or not receiver_account.isdigit():
+                st.error("Enter a valid 10-digit account number.")
+            elif bank == "DAVE Bank" and not validate_nuban(receiver_account):
+                st.error("Enter a valid DAVE Bank account number.")
+            elif receiver_account == st.session_state.account_no:
+                st.error("You cannot transfer to the same account.")
             else:
-                try:
-                    with sql.connect(DB_PATH) as conn:
-                        cur = conn.cursor()
-                        cur.execute('''SELECT c.id, c.email, c.username, c.password, a.id, a.account_no, a.balance, p.phone_number
-                                       FROM customer c
-                                       LEFT JOIN phone p ON c.id=p.customer_id
-                                       JOIN account a ON c.id=a.customer_id
-                                       WHERE c.email=? OR p.phone_number=? LIMIT 1''', (key, key))
-                        row = cur.fetchone()
+                _run_customer_transaction(
+                    "Transfer",
+                    amount,
+                    extra={"receiver_bank": bank, "receiver_acct_no": receiver_account},
+                )
+    elif view == "Buy Airtime":
+        with st.form("airtime_form", clear_on_submit=True):
+            network = st.selectbox("Network", ("MTN", "Airtel", "Glo", "9mobile"))
+            phone = st.text_input("Phone number", max_chars=11)
+            amount = st.number_input(f"Amount ({NAIRA})", min_value=1.0, step=100.0)
+            submitted = st.form_submit_button("Buy airtime", type="primary")
+        if submitted:
+            phone = phone.strip()
+            if not validate_phone(phone):
+                st.error("Enter a valid 11-digit Nigerian mobile number.")
+            else:
+                _run_customer_transaction(
+                    "Buy Airtime", amount, extra={"phone": phone, "network": network}
+                )
+    elif view == "Pay Bills":
+        with st.form("bills_form", clear_on_submit=True):
+            bill = st.selectbox("Bill type", ("Electricity", "Internet", "Water", "Cable TV"))
+            amount = st.number_input(f"Amount ({NAIRA})", min_value=1.0, step=100.0)
+            submitted = st.form_submit_button("Pay bill", type="primary")
+        if submitted:
+            _run_customer_transaction("Pay Bills", amount, extra={"bill": bill})
+    elif view == "Transaction History":
+        with get_connection() as connection:
+            frame = pd.read_sql_query(
+                """
+                SELECT transaction_type AS Transaction, amount AS Amount, date AS Date
+                FROM transaction_record
+                WHERE account_id = ?
+                ORDER BY id DESC
+                """,
+                connection,
+                params=(st.session_state.account_id,),
+            )
+        if frame.empty:
+            st.info("No transactions are available.")
+        else:
+            frame["Amount"] = frame["Amount"].map(_currency)
+            st.dataframe(frame, use_container_width=True, hide_index=True)
+    elif view == "Customer Ledger":
+        with get_connection() as connection:
+            frame = pd.read_sql_query(
+                """
+                SELECT date AS Date, description AS Description, debit AS Debit,
+                       credit AS Credit, balance AS Balance
+                FROM ledger
+                WHERE account_id = ?
+                ORDER BY id DESC
+                """,
+                connection,
+                params=(st.session_state.account_id,),
+            )
+        if frame.empty:
+            st.info("No ledger entries are available.")
+        else:
+            for column in ("Debit", "Credit", "Balance"):
+                frame[column] = frame[column].map(_currency)
+            st.dataframe(frame, use_container_width=True, hide_index=True)
 
-                        if not row:
-                            st.error("Account not found.")
-                        else:
-                            cid, email, username, stored, aid, acc_no, bal, phone = row
-                            if stored is None:
-                                if username == 'admin' and email.lower() == 'admin@gmail.com':
-                                    st.error("Configuration error.")
-                                else:
-                                    st.error("Authentication error.")
-                            else:
-                                if bcrypt.checkpw(password.encode('utf-8'), stored.encode('utf-8')):
-                                    st.session_state.customer_id = cid
-                                    st.session_state.email = email
-                                    st.session_state.username = username
-                                    st.session_state.account_id = aid
-                                    st.session_state.account_no = acc_no
-                                    st.session_state.balance = Decimal(str(bal))
-                                    st.session_state.phone = phone or ""
-                                    navigate_to("dashboard")
-                                    st.rerun()
-                                else:
-                                    st.error("Incorrect password.")
-                except sql.Error as err:
-                    st.error("Database error.")
-    st.button("Back to Home", on_click=navigate_to, args=("home",))
 
-def show_dashboard():
-    refresh_balance()
-    is_admin = (st.session_state.username == 'admin' and st.session_state.email.lower() == 'admin@gmail.com')
+def show_dashboard() -> None:
+    if not refresh_balance():
+        st.session_state.clear()
+        st.session_state.flash_message = "Your session expired. Please sign in again."
+        st.session_state.page = "signin"
+        st.rerun()
+
+    is_admin = _is_admin()
+    default_view = "Trial Balance" if is_admin else "Check Balance"
+    st.session_state.setdefault("dash_view", default_view)
+    st.session_state.setdefault("idempotency_key", _new_idempotency_key())
 
     st.sidebar.title(f"Welcome, {st.session_state.username}")
     if not is_admin:
-        st.sidebar.markdown(f"**Account No:** `{st.session_state.account_no}`")
-        st.sidebar.markdown(f"**Balance:** `₦{st.session_state.balance:,.2f}`")
+        st.sidebar.caption(f"Account number: {st.session_state.account_no}")
+        st.sidebar.metric("Balance", _currency(st.session_state.balance))
     st.sidebar.divider()
-    
-    if "dash_view" not in st.session_state:
-        st.session_state.dash_view = "Check Balance" if not is_admin else "Trial Balance"
-    if "idempotency_key" not in st.session_state:
-        st.session_state.idempotency_key = str(uuid.uuid4())
-        
-    def set_dash_view(view):
-        st.session_state.dash_view = view
-        st.session_state.idempotency_key = str(uuid.uuid4())
 
-    if is_admin:
-        st.sidebar.button("📊 Trial Balance", on_click=set_dash_view, args=("Trial Balance",), use_container_width=True)
-        st.sidebar.button("📚 Subledgers", on_click=set_dash_view, args=("Subledgers",), use_container_width=True)
-        st.sidebar.button("📖 Customer Subledger", on_click=set_dash_view, args=("Customer Subledger",), use_container_width=True)
-        st.sidebar.button("⚖️ Reconcile Customer", on_click=set_dash_view, args=("Reconcile Customer",), use_container_width=True)
-    else:
-        st.sidebar.button("💰 Check Balance", on_click=set_dash_view, args=("Check Balance",), use_container_width=True)
-        st.sidebar.button("📥 Deposit", on_click=set_dash_view, args=("Deposit",), use_container_width=True)
-        st.sidebar.button("📤 Withdraw", on_click=set_dash_view, args=("Withdraw",), use_container_width=True)
-        st.sidebar.button("🔄 Transfer", on_click=set_dash_view, args=("Transfer",), use_container_width=True)
-        st.sidebar.button("📱 Buy Airtime", on_click=set_dash_view, args=("Buy Airtime",), use_container_width=True)
-        st.sidebar.button("🧾 Pay Bills", on_click=set_dash_view, args=("Pay Bills",), use_container_width=True)
-        st.sidebar.button("📜 Transaction History", on_click=set_dash_view, args=("Transaction History",), use_container_width=True)
-        st.sidebar.button("📓 View Customer Ledger", on_click=set_dash_view, args=("View Customer Ledger",), use_container_width=True)
-    
+    views = (
+        ("Trial Balance", "Subledgers", "Customer Subledger", "Reconcile Customer")
+        if is_admin
+        else (
+            "Check Balance",
+            "Deposit",
+            "Withdraw",
+            "Transfer",
+            "Buy Airtime",
+            "Pay Bills",
+            "Transaction History",
+            "Customer Ledger",
+        )
+    )
+    for view in views:
+        st.sidebar.button(
+            view,
+            key=f"nav_{view}",
+            on_click=_set_dashboard_view,
+            args=(view,),
+            use_container_width=True,
+        )
+
     st.sidebar.divider()
-    
-    def sign_out():
-        st.session_state.clear()
-        navigate_to("home")
-        
-    st.sidebar.button("🚪 Sign Out", on_click=sign_out, use_container_width=True)
+    st.sidebar.button("Sign out", on_click=_sign_out, use_container_width=True)
 
-    st.title(st.session_state.dash_view)
-
-    # --- Admin Views ---
-    if st.session_state.dash_view == "Trial Balance" and is_admin:
-        try:
-            with sql.connect(DB_PATH) as conn:
-                query = "SELECT account_name, SUM(debit) as Debit, SUM(credit) as Credit FROM bank_ledger GROUP BY account_name"
-                df = pd.read_sql_query(query, conn)
-                total_debit = df['Debit'].sum()
-                total_credit = df['Credit'].sum()
-                diff = total_debit - total_credit
-                
-                st.markdown(f"**Total Debits:** ₦{total_debit:,.2f} &nbsp;&nbsp;|&nbsp;&nbsp; **Total Credits:** ₦{total_credit:,.2f} &nbsp;&nbsp;|&nbsp;&nbsp; **Difference:** ₦{diff:,.2f}")
-                
-                df['Debit'] = df['Debit'].apply(lambda x: f"₦{x:,.2f}")
-                df['Credit'] = df['Credit'].apply(lambda x: f"₦{x:,.2f}")
-                st.dataframe(df, use_container_width=True, hide_index=True)
-        except Exception as e:
-            st.error("Error loading Trial Balance.")
-
-    elif st.session_state.dash_view == "Subledgers" and is_admin:
-        try:
-            with sql.connect(DB_PATH) as conn:
-                query = "SELECT account_name as Name, account_type as Type, balance as Balance, description as Description FROM subledger_account ORDER BY account_type, account_name"
-                df = pd.read_sql_query(query, conn)
-                df['Balance'] = df['Balance'].apply(lambda x: f"₦{x:,.2f}")
-                st.dataframe(df, use_container_width=True, hide_index=True)
-        except Exception as e:
-            st.error("Error loading Subledgers.")
-
-    elif st.session_state.dash_view == "Customer Subledger" and is_admin:
-        st.info("Feature available directly via database queries for Admin.")
-        
-    elif st.session_state.dash_view == "Reconcile Customer" and is_admin:
-        st.info("Feature available directly via database queries for Admin.")
-
-    # --- Customer Views ---
-    elif st.session_state.dash_view == "Check Balance":
-        st.metric(label="Current Balance", value=f"₦{st.session_state.balance:,.2f}")
-        
-    elif st.session_state.dash_view == "Deposit":
-        with st.form("deposit_form", clear_on_submit=True):
-            amount = st.number_input("Amount to Deposit (₦)", min_value=1.0, step=100.0)
-            if st.form_submit_button("Deposit Funds"):
-                if exec_transaction("Deposit", amount, idempotency_key=st.session_state.idempotency_key):
-                    st.success(f"₦{amount:,.2f} deposited successfully!")
-                    st.session_state.idempotency_key = str(uuid.uuid4())
-                    time.sleep(2)
-                    st.rerun()
-
-    elif st.session_state.dash_view == "Withdraw":
-        with st.form("withdraw_form", clear_on_submit=True):
-            amount = st.number_input("Amount to Withdraw (₦)", min_value=1.0, step=100.0)
-            if st.form_submit_button("Withdraw Funds"):
-                if exec_transaction("Withdrawal", amount, idempotency_key=st.session_state.idempotency_key):
-                    st.success(f"₦{amount:,.2f} withdrawn successfully!")
-                    st.session_state.idempotency_key = str(uuid.uuid4())
-                    time.sleep(2)
-                    st.rerun()
-
-    elif st.session_state.dash_view == "Transfer":
-        with st.form("transfer_form", clear_on_submit=True):
-            ngn_banks = [
-                "DAVE Bank", "Access Bank", "Citibank Nigeria", "Ecobank Nigeria", "Fidelity Bank", 
-                "First Bank of Nigeria", "First City Monument Bank (FCMB)", "Globus Bank", 
-                "Guaranty Trust Bank (GTBank)", "Heritage Bank", "Jaiz Bank", "Keystone Bank", 
-                "Kuda Bank", "Lotus Bank", "Moniepoint", "Mutual Trust Microfinance Bank", 
-                "Opay", "Palmpay", "Parallex Bank", "Polaris Bank", "PremiumTrust Bank", 
-                "Providus Bank", "Signature Bank", "Stanbic IBTC Bank", "Standard Chartered", 
-                "Sterling Bank", "SunTrust Bank", "TAJBank", "Titan Trust Bank", "Union Bank of Nigeria", 
-                "United Bank for Africa (UBA)", "Unity Bank", "Wema Bank", "Zenith Bank"
-            ]
-            bank = st.selectbox("Receiver's Bank", ngn_banks)
-            receiver_acct = st.text_input("Receiver's Account Number (10 digits)")
-            amount = st.number_input("Amount to Transfer (₦)", min_value=1.0, step=100.0)
-            if st.form_submit_button("Transfer Funds"):
-                receiver_acct = receiver_acct.strip()
-                if not receiver_acct:
-                    st.error("Missing receiver account.")
-                elif not receiver_acct.isdigit() or len(receiver_acct) != 10:
-                    st.error("Invalid account number.")
-                elif bank.lower() in ["dave bank", "dave"] and not validate_nuban(receiver_acct):
-                    st.error("Invalid account number.")
-                elif receiver_acct == st.session_state.account_no:
-                    st.error("Invalid transfer.")
-                else:
-                    extra = {'receiver_bank': bank, 'receiver_acct_no': receiver_acct}
-                    if exec_transaction("Transfer", amount, extra=extra, idempotency_key=st.session_state.idempotency_key):
-                        st.success(f"₦{amount:,.2f} transferred to {receiver_acct} ({bank}).")
-                        st.session_state.idempotency_key = str(uuid.uuid4())
-                        time.sleep(2)
-                        st.rerun()
-
-    elif st.session_state.dash_view == "Buy Airtime":
-        with st.form("airtime_form", clear_on_submit=True):
-            network = st.selectbox("Select Network", ["MTN", "Airtel", "Glo", "9mobile"])
-            phone = st.text_input("Phone Number (11 digits)")
-            amount = st.number_input("Airtime Amount (₦)", min_value=1.0, step=100.0)
-            if st.form_submit_button("Buy Airtime"):
-                phone = phone.strip()
-                if not phone:
-                    st.error("Missing phone number.")
-                elif not phone.isdigit() or len(phone) != 11:
-                    st.error("Invalid phone number.")
-                elif phone[:3] not in ["080", "081", "090", "091", "070"]:
-                    st.error("Invalid phone number.")
-                else:
-                    extra = {'phone': phone}
-                    if exec_transaction("Buy Airtime", amount, extra=extra, idempotency_key=st.session_state.idempotency_key):
-                        st.success(f"₦{amount:,.2f} airtime recharged on {network} ({phone}).")
-                        st.session_state.idempotency_key = str(uuid.uuid4())
-                        time.sleep(2)
-                        st.rerun()
-
-    elif st.session_state.dash_view == "Pay Bills":
-        with st.form("bills_form", clear_on_submit=True):
-            bill_type = st.selectbox("Select Bill Type", ["Electricity", "Internet", "Water", "Cable TV"])
-            amount = st.number_input("Bill Amount (₦)", min_value=1.0, step=100.0)
-            if st.form_submit_button("Pay Bill"):
-                extra = {'bill': bill_type}
-                if exec_transaction("Pay Bills", amount, extra=extra, idempotency_key=st.session_state.idempotency_key):
-                    st.success(f"₦{amount:,.2f} paid for {bill_type}.")
-                    st.session_state.idempotency_key = str(uuid.uuid4())
-                    time.sleep(2)
-                    st.rerun()
-
-    elif st.session_state.dash_view == "Transaction History":
-        try:
-            with sql.connect(DB_PATH) as conn:
-                query = "SELECT transaction_type AS 'Transaction', amount AS 'Amount', date AS 'Date' FROM transaction_record WHERE account_id = ? ORDER BY date DESC"
-                df = pd.read_sql_query(query, conn, params=(st.session_state.account_id,))
-                if df.empty:
-                    st.info("No transactions found.")
-                else:
-                    df['Amount'] = df['Amount'].apply(lambda x: f"₦{x:,.2f}")
-                    st.dataframe(df, use_container_width=True, hide_index=True)
-        except Exception as e:
-            st.error("Error loading transactions.")
-
-    elif st.session_state.dash_view == "View Customer Ledger":
-        try:
-            with sql.connect(DB_PATH) as conn:
-                query = "SELECT date AS 'Date', description AS 'Description', debit AS 'Debit', credit AS 'Credit', balance AS 'Balance' FROM ledger WHERE account_id = ? ORDER BY date DESC"
-                df = pd.read_sql_query(query, conn, params=(st.session_state.account_id,))
-                if df.empty:
-                    st.info("No ledger entries found.")
-                else:
-                    df['Debit'] = df['Debit'].apply(lambda x: f"₦{x:,.2f}")
-                    df['Credit'] = df['Credit'].apply(lambda x: f"₦{x:,.2f}")
-                    df['Balance'] = df['Balance'].apply(lambda x: f"₦{x:,.2f}")
-                    st.dataframe(df, use_container_width=True, hide_index=True)
-        except Exception as e:
-            st.error("Error loading ledger.")
+    view = st.session_state.dash_view
+    st.title(view)
+    try:
+        if is_admin:
+            _show_admin_view(view)
+        else:
+            _show_customer_view(view)
+    except sql.Error:
+        LOGGER.exception("Dashboard query failed for view %s", view)
+        st.error("This view is temporarily unavailable.")

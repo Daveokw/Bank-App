@@ -1,5 +1,7 @@
 # Database
 *.db
+*.db-wal
+*.db-shm
 *.log
 
 # Python
@@ -7,10 +9,22 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.pyo
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
 # Virtual environment
 venv/
+.venv/
 .env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# Node and keep-alive artefacts
+node_modules/
+keep_alive_screenshot.png
 
 # IDE
 .vscode/
