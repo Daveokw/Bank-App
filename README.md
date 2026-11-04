@@ -159,6 +159,8 @@ Deploy `app.py` from the repository root. Python dependencies are declared in `r
 
 The GitHub Actions availability workflow checks the deployed interface every four hours at an off-peak minute. It can wake a sleeping app and fails if the real DAVE Bank interface does not load. GitHub schedules are best-effort, so this reduces—but cannot eliminate—the possibility of Community Cloud hibernation.
 
+The monthly `Record Repository Activity` workflow updates `.github/repository-heartbeat.txt` on the first day of each month at 03:17 UTC so the repository stays active even when no code is being developed. It can also be triggered manually from the **Actions** tab. GitHub may automatically disable scheduled workflows in a public repository after roughly 60 days without repository activity; the heartbeat runs well before that limit to keep all scheduled workflows enabled.
+
 ## Data and security limitations
 
 - SQLite storage on Streamlit Community Cloud is ephemeral and is not suitable for production banking data.
